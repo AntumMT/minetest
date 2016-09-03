@@ -1,0 +1,6 @@
+diff -ruN minetest-master/build/debian/freeminer.install minetest-freeminer/build/debian/freeminer.install
+--- minetest-master/build/debian/freeminer.install	1969-12-31 16:00:00.000000000 -0800
++++ minetest-freeminer/build/debian/freeminer.install	2016-09-03 15:43:59.878740000 -0700
+@@ -0,0 +1,2 @@
++usr/bin/freeminer        /usr/games
++usr/share/applications/freeminer.desktop /usr/share/applications

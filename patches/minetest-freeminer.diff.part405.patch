@@ -1,0 +1,23 @@
+diff -ruN minetest-master/src/objdef.cpp minetest-freeminer/src/objdef.cpp
+--- minetest-master/src/objdef.cpp	2016-09-03 16:15:52.553779000 -0700
++++ minetest-freeminer/src/objdef.cpp	2016-09-03 15:43:59.650739000 -0700
+@@ -31,14 +31,18 @@
+ 
+ ObjDefManager::~ObjDefManager()
+ {
++	clear();
++/*
+ 	for (size_t i = 0; i != m_objects.size(); i++)
+ 		delete m_objects[i];
++*/
+ }
+ 
+ 
+ ObjDefHandle ObjDefManager::add(ObjDef *obj)
+ {
+-	assert(obj);
++	if (!obj)
++		return OBJDEF_INVALID_HANDLE;
+ 
+ 	if (obj->name.length() && getByName(obj->name))
+ 		return OBJDEF_INVALID_HANDLE;

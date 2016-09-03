@@ -1,0 +1,11 @@
+diff -ruN minetest-master/build/windows/.gitignore minetest-freeminer/build/windows/.gitignore
+--- minetest-master/build/windows/.gitignore	1969-12-31 16:00:00.000000000 -0800
++++ minetest-freeminer/build/windows/.gitignore	2016-09-03 15:43:59.934741000 -0700
+@@ -0,0 +1,7 @@
++__pycache__
++*.pyc
++settings.py
++project
++deps
++install_tmp
++*.log

@@ -1,0 +1,11 @@
+diff -ruN minetest-master/src/contrib/CMakeLists.txt minetest-freeminer/src/contrib/CMakeLists.txt
+--- minetest-master/src/contrib/CMakeLists.txt	1969-12-31 16:00:00.000000000 -0800
++++ minetest-freeminer/src/contrib/CMakeLists.txt	2016-09-03 15:43:59.498738000 -0700
+@@ -0,0 +1,7 @@
++set(contrib_SRCS
++	${CMAKE_CURRENT_SOURCE_DIR}/environment.cpp
++	${CMAKE_CURRENT_SOURCE_DIR}/fallingsao.cpp
++	${CMAKE_CURRENT_SOURCE_DIR}/itemsao.cpp
++	${CMAKE_CURRENT_SOURCE_DIR}/l_env.cpp
++	PARENT_SCOPE
++)

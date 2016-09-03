@@ -1,0 +1,138 @@
+diff -ruN minetest-master/src/guiTable.cpp minetest-freeminer/src/guiTable.cpp
+--- minetest-master/src/guiTable.cpp	2016-09-03 16:15:52.569779000 -0700
++++ minetest-freeminer/src/guiTable.cpp	2016-09-03 15:43:59.910741000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++guiTable.cpp
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ 
+@@ -62,7 +65,8 @@
+ 	m_highlight_text(255, 255, 255, 255),
+ 	m_rowheight(1),
+ 	m_font(NULL),
+-	m_scrollbar(NULL)
++	m_scrollbar(NULL),
++	m_scrollbar_enabled(true)
+ {
+ 	assert(tsrc != NULL);
+ 
+@@ -230,10 +234,12 @@
+ 	// Get number of columns and rows
+ 	// note: error case columns.size() == 0 was handled above
+ 	s32 colcount = columns.size();
+-	assert(colcount >= 1);
++	if (!(colcount >= 1))
++		return;
+ 	// rowcount = ceil(cellcount / colcount) but use integer arithmetic
+ 	s32 rowcount = (content.size() + colcount - 1) / colcount;
+-	assert(rowcount >= 0);
++	if (!(rowcount >= 0))
++		return;
+ 	// Append empty strings to content if there is an incomplete row
+ 	s32 cellcount = rowcount * colcount;
+ 	while (content.size() < (u32) cellcount)
+@@ -524,7 +530,8 @@
+ std::string GUITable::checkEvent()
+ {
+ 	s32 sel = getSelected();
+-	assert(sel >= 0);
++	if (!(sel >= 0))
++		return "INV";
+ 
+ 	if (sel == 0) {
+ 		return "INV";
+@@ -550,7 +557,8 @@
+ 	if (m_selected < 0)
+ 		return 0;
+ 
+-	assert(m_selected >= 0 && m_selected < (s32) m_visible_rows.size());
++	if (!(m_selected >= 0 && m_selected < (s32) m_visible_rows.size()))
++		return 0;
+ 	return m_visible_rows[m_selected] + 1;
+ }
+ 
+@@ -590,7 +598,8 @@
+ 
+ 	if (index >= 0) {
+ 		m_selected = m_rows[index].visible_index;
+-		assert(m_selected >= 0 && m_selected < (s32) m_visible_rows.size());
++		if (!(m_selected >= 0 && m_selected < (s32) m_visible_rows.size()))
++			return;
+ 	}
+ 
+ 	if (m_selected != old_selected || selection_invisible) {
+@@ -1048,7 +1057,8 @@
+ 	s32 jmax = row->cellcount - 1;
+ 	while (jmin < jmax) {
+ 		s32 pivot = jmin + (jmax - jmin) / 2;
+-		assert(pivot >= 0 && pivot < row->cellcount);
++		if(!(pivot >= 0 && pivot < row->cellcount))
++			return -1;
+ 		const Cell *cell = &row->cells[pivot];
+ 
+ 		if (rel_x >= cell->xmin && rel_x <= cell->xmax)
+@@ -1080,11 +1090,15 @@
+ 	}
+ }
+ 
++void GUITable::setScrollBarEnabled(bool value) {
++	m_scrollbar_enabled = value;
++}
++
+ void GUITable::updateScrollBar()
+ {
+ 	s32 totalheight = m_rowheight * m_visible_rows.size();
+ 	s32 scrollmax = MYMAX(0, totalheight - AbsoluteRect.getHeight());
+-	m_scrollbar->setVisible(scrollmax > 0);
++	m_scrollbar->setVisible(scrollmax > 0 && m_scrollbar_enabled);
+ 	m_scrollbar->setMax(scrollmax);
+ 	m_scrollbar->setSmallStep(m_rowheight);
+ 	m_scrollbar->setLargeStep(2 * m_rowheight);
+@@ -1137,7 +1151,8 @@
+ 				m_rows[closed_parents.back()].indent >= row->indent)
+ 			closed_parents.pop_back();
+ 
+-		assert(closed_parents.size() <= parents.size());
++		if(!(closed_parents.size() <= parents.size()))
++			continue;
+ 
+ 		if (closed_parents.empty()) {
+ 			// Visible row
+@@ -1235,7 +1250,8 @@
+ 		}
+ 		else if (!was_open && !do_open) {
+ 			// Move selection to parent
+-			assert(getRow(sel) != NULL);
++			if(!(getRow(sel) != NULL))
++				return;
+ 			while (sel > 0 && getRow(sel - 1)->indent >= row->indent)
+ 				sel--;
+ 			sel--;

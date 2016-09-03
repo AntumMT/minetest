@@ -1,0 +1,11 @@
+diff -ruN minetest-master/src/mg_decoration.cpp minetest-freeminer/src/mg_decoration.cpp
+--- minetest-master/src/mg_decoration.cpp	2016-09-03 16:15:52.553779000 -0700
++++ minetest-freeminer/src/mg_decoration.cpp	2016-09-03 15:43:59.650739000 -0700
+@@ -331,7 +331,6 @@
+ 
+ ///////////////////////////////////////////////////////////////////////////////
+ 
+-
+ DecoSchematic::DecoSchematic()
+ {
+ 	schematic = NULL;

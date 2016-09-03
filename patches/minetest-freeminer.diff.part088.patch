@@ -1,0 +1,30 @@
+diff -ruN minetest-master/builtin/game/item.lua minetest-freeminer/builtin/game/item.lua
+--- minetest-master/builtin/game/item.lua	2016-09-03 16:15:52.493778000 -0700
++++ minetest-freeminer/builtin/game/item.lua	2016-09-03 15:43:59.506738000 -0700
+@@ -282,7 +282,17 @@
+ 	end
+ 
+ 	-- Add node and update
+-	core.add_node(place_to, newnode)
++	local olddef = core.registered_nodes[oldnode.name]
++	if olddef.leveled and olddef.leveled>0 
++	--and olddef.liquidtype ~= "none" 
++		and
++			(newnode.name == oldnode.name or newnode.name == olddef.liquid_alternative_flowing or newnode.name == olddef.liquid_alternative_source) then
++		local level = param2
++		if not level or level < 1 then level = 1 end
++		core.add_node_level(place_to, level, 1)
++	else
++		core.add_node(place_to, newnode)
++	end
+ 
+ 	local take_item = true
+ 
+@@ -363,6 +373,7 @@
+ 			v.z = v.z*2
+ 			obj:setvelocity(v)
+ 			obj:get_luaentity().dropped_by = dropper:get_player_name()
++			obj:get_luaentity().ttl = 86400 * 365 * 10; -- huge time for player drops
+ 			return itemstack
+ 		end
+ 

@@ -1,0 +1,7 @@
+diff -ruN minetest-master/build/debian.txt minetest-freeminer/build/debian.txt
+--- minetest-master/build/debian.txt	1969-12-31 16:00:00.000000000 -0800
++++ minetest-freeminer/build/debian.txt	2016-09-03 15:43:59.754740000 -0700
+@@ -0,0 +1,3 @@
++How to make package:
++
++make -f debian/rules get-orig-source && debuild

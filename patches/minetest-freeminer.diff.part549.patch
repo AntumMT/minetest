@@ -1,0 +1,27 @@
+diff -ruN minetest-master/src/unittest/test_socket.cpp minetest-freeminer/src/unittest/test_socket.cpp
+--- minetest-master/src/unittest/test_socket.cpp	2016-09-03 16:15:52.565779000 -0700
++++ minetest-freeminer/src/unittest/test_socket.cpp	2016-09-03 15:43:59.722739000 -0700
+@@ -23,10 +23,14 @@
+ #include "socket.h"
+ #include "settings.h"
+ 
++#include "util/numeric.h"
++
+ class TestSocket : public TestBase {
+ public:
+ 	TestSocket()
+ 	{
++		port = 60003 + 987; // + myrand_range(42,123);
++
+ 		if (INTERNET_SIMULATOR == false)
+ 			TestManager::registerTestModule(this);
+ 	}
+@@ -38,7 +42,7 @@
+ 	void testIPv4Socket();
+ 	void testIPv6Socket();
+ 
+-	static const int port = 30003;
++	int port;
+ };
+ 
+ static TestSocket g_test_instance;

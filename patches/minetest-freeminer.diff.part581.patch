@@ -1,0 +1,16 @@
+diff -ruN minetest-master/util/autotest/freeminer.bot.conf minetest-freeminer/util/autotest/freeminer.bot.conf
+--- minetest-master/util/autotest/freeminer.bot.conf	1969-12-31 16:00:00.000000000 -0800
++++ minetest-freeminer/util/autotest/freeminer.bot.conf	2016-09-03 15:43:59.990741000 -0700
+@@ -0,0 +1,12 @@
++# config for testing with graphics
++name = autotest
++random_input = 1
++continuous_forward = 1
++autojump = 1
++respawn_auto = 1
++enable_sound = 0
++reconnects = 10000
++debug_log_level = 4
++enable_mapgen_debug_info = 1
++profiler_print_interval = 100000
++disable_anticheat = 1

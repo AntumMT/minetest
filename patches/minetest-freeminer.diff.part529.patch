@@ -1,0 +1,11 @@
+diff -ruN minetest-master/src/threading/event.cpp minetest-freeminer/src/threading/event.cpp
+--- minetest-master/src/threading/event.cpp	2016-09-03 16:15:52.673779000 -0700
++++ minetest-freeminer/src/threading/event.cpp	2016-09-03 15:43:59.990741000 -0700
+@@ -24,6 +24,7 @@
+ */
+ 
+ #include "threading/event.h"
++#include "threading/mutex_auto_lock.h"
+ 
+ Event::Event()
+ {

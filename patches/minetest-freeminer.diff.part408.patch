@@ -1,0 +1,102 @@
+diff -ruN minetest-master/src/particles.cpp minetest-freeminer/src/particles.cpp
+--- minetest-master/src/particles.cpp	2016-09-03 16:15:52.453778000 -0700
++++ minetest-freeminer/src/particles.cpp	2016-09-03 15:43:59.478738000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++particles.cpp
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "particles.h"
+@@ -157,15 +160,14 @@
+ void Particle::updateLight()
+ {
+ 	u8 light = 0;
+-	bool pos_ok;
+ 
+ 	v3s16 p = v3s16(
+ 		floor(m_pos.X+0.5),
+ 		floor(m_pos.Y+0.5),
+ 		floor(m_pos.Z+0.5)
+ 	);
+-	MapNode n = m_env->getClientMap().getNodeNoEx(p, &pos_ok);
+-	if (pos_ok)
++	MapNode n = m_env->getClientMap().getNodeTry(p);
++	if (n.getContent() != CONTENT_IGNORE)
+ 		light = n.getLightBlend(m_env->getDayNightRatio(), m_gamedef->ndef());
+ 	else
+ 		light = blend_light(m_env->getDayNightRatio(), LIGHT_SUN, 0);
+@@ -352,7 +354,7 @@
+ void ParticleManager::stepSpawners (float dtime)
+ {
+ 	MutexAutoLock lock(m_spawner_list_lock);
+-	for (std::map<u32, ParticleSpawner*>::iterator i =
++	for(auto i =
+ 			m_particle_spawners.begin();
+ 			i != m_particle_spawners.end();)
+ 	{
+@@ -372,7 +374,7 @@
+ void ParticleManager::stepParticles (float dtime)
+ {
+ 	MutexAutoLock lock(m_particle_list_lock);
+-	for(std::vector<Particle*>::iterator i = m_particles.begin();
++	for(auto i = m_particles.begin();
+ 			i != m_particles.end();)
+ 	{
+ 		if ((*i)->get_expired())
+@@ -391,16 +393,19 @@
+ 
+ void ParticleManager::clearAll ()
+ {
++	{
+ 	MutexAutoLock lock(m_spawner_list_lock);
+-	MutexAutoLock lock2(m_particle_list_lock);
+-	for(std::map<u32, ParticleSpawner*>::iterator i =
++	for(auto i =
+ 			m_particle_spawners.begin();
+ 			i != m_particle_spawners.end();)
+ 	{
+ 		delete i->second;
+ 		m_particle_spawners.erase(i++);
+ 	}
++	}
+ 
++	{
++	MutexAutoLock lock2(m_particle_list_lock);
+ 	for(std::vector<Particle*>::iterator i =
+ 			m_particles.begin();
+ 			i != m_particles.end();)
+@@ -409,6 +414,7 @@
+ 		delete *i;
+ 		i = m_particles.erase(i);
+ 	}
++	}
+ }
+ 
+ void ParticleManager::handleParticleEvent(ClientEvent *event, IGameDef *gamedef,

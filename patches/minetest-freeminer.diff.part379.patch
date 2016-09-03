@@ -1,0 +1,12 @@
+diff -ruN minetest-master/src/network/clientopcodes.cpp minetest-freeminer/src/network/clientopcodes.cpp
+--- minetest-master/src/network/clientopcodes.cpp	2016-09-03 16:15:52.669779000 -0700
++++ minetest-freeminer/src/network/clientopcodes.cpp	2016-09-03 15:43:59.986741000 -0700
+@@ -78,7 +78,7 @@
+ 	{ "TOCLIENT_HP",                       TOCLIENT_STATE_CONNECTED, &Client::handleCommand_HP }, // 0x33
+ 	{ "TOCLIENT_MOVE_PLAYER",              TOCLIENT_STATE_CONNECTED, &Client::handleCommand_MovePlayer }, // 0x34
+ 	{ "TOCLIENT_ACCESS_DENIED_LEGACY",     TOCLIENT_STATE_NOT_CONNECTED, &Client::handleCommand_AccessDenied }, // 0x35
+-	{ "TOCLIENT_PLAYERITEM",               TOCLIENT_STATE_CONNECTED, &Client::handleCommand_PlayerItem }, // 0x36
++	{ "TOCLIENT_PUNCH_PLAYER",             TOCLIENT_STATE_CONNECTED, &Client::handleCommand_PunchPlayer }, // 0x36
+ 	{ "TOCLIENT_DEATHSCREEN",              TOCLIENT_STATE_CONNECTED, &Client::handleCommand_DeathScreen }, // 0x37
+ 	{ "TOCLIENT_MEDIA",                    TOCLIENT_STATE_CONNECTED, &Client::handleCommand_Media }, // 0x38
+ 	{ "TOCLIENT_TOOLDEF",                  TOCLIENT_STATE_CONNECTED, &Client::handleCommand_ToolDef }, // 0x39

@@ -1,0 +1,252 @@
+diff -ruN minetest-master/src/mapgen_v7.cpp minetest-freeminer/src/mapgen_v7.cpp
+--- minetest-master/src/mapgen_v7.cpp	2016-09-03 16:15:52.569779000 -0700
++++ minetest-freeminer/src/mapgen_v7.cpp	2016-09-03 15:43:59.910741000 -0700
+@@ -1,21 +1,24 @@
+ /*
+-Minetest
++mapgen_v7.cpp
+ Copyright (C) 2010-2015 kwolekr, Ryan Kwolek <kwolekr@minetest.net>
+ Copyright (C) 2010-2015 paramat, Matt Gregory
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ 
+@@ -38,6 +41,10 @@
+ #include "mg_ore.h"
+ #include "mg_decoration.h"
+ #include "mapgen_v7.h"
++#include "mapgen_indev.h" //farscale
++#include "environment.h"
++#include "log_types.h"
++
+ 
+ 
+ FlagDesc flagdesc_mapgen_v7[] = {
+@@ -52,6 +59,7 @@
+ 
+ MapgenV7::MapgenV7(int mapgenid, MapgenV7Params *params, EmergeManager *emerge)
+ 	: MapgenBasic(mapgenid, params, emerge)
++	, Mapgen_features(mapgenid, params, emerge)
+ {
+ 	this->spflags    = params->spflags;
+ 	this->cave_width = params->cave_width;
+@@ -70,6 +78,19 @@
+ 	noise_mountain = new Noise(&params->np_mountain, seed, csize.X, csize.Y + 2, csize.Z);
+ 	noise_ridge    = new Noise(&params->np_ridge,    seed, csize.X, csize.Y + 2, csize.Z);
+ 
++	//freeminer:
++	y_offset = 1;
++
++	float_islands = params->float_islands;
++	noise_float_islands1  = new Noise(&params->np_float_islands1, seed, csize.X, csize.Y + y_offset * 2, csize.Z);
++	noise_float_islands2  = new Noise(&params->np_float_islands2, seed, csize.X, csize.Y + y_offset * 2, csize.Z);
++	noise_float_islands3  = new Noise(&params->np_float_islands3, seed, csize.X, csize.Z);
++
++	noise_layers          = new Noise(&params->np_layers,         seed, csize.X, csize.Y + y_offset * 2, csize.Z);
++	layers_init(emerge, params->paramsj);
++	//noise_cave_indev      = new Noise(&params->np_cave_indev,     seed, csize.X, csize.Y + y_offset * 2, csize.Z);
++	//==========
++
+ 	MapgenBasic::np_cave1 = params->np_cave1;
+ 	MapgenBasic::np_cave2 = params->np_cave2;
+ }
+@@ -94,6 +115,14 @@
+ 	spflags    = MGV7_MOUNTAINS | MGV7_RIDGES;
+ 	cave_width = 0.2;
+ 
++//freeminer:
++	float_islands = 500;
++	np_float_islands1  = NoiseParams(0,    1,   v3f(256, 256, 256), 3683,  6, 0.6, 2.0, NOISE_FLAG_DEFAULTS, 1,   1.5);
++	np_float_islands2  = NoiseParams(0,    1,   v3f(8,   8,   8  ), 9292,  2, 0.5, 2.0, NOISE_FLAG_DEFAULTS, 1,   1.5);
++	np_float_islands3  = NoiseParams(0,    1,   v3f(256, 256, 256), 6412,  2, 0.5, 2.0, NOISE_FLAG_DEFAULTS, 1,   0.5);
++	np_layers          = NoiseParams(500,  500, v3f(100, 100,  100), 3663, 5, 0.6, 2.0, NOISE_FLAG_DEFAULTS, 1,   1.1,   0.5);
++//----------
++
+ 	np_terrain_base    = NoiseParams(4,    70,  v3f(600,  600,  600),  82341, 5, 0.6,  2.0);
+ 	np_terrain_alt     = NoiseParams(4,    25,  v3f(600,  600,  600),  5934,  5, 0.6,  2.0);
+ 	np_terrain_persist = NoiseParams(0.6,  0.1, v3f(2000, 2000, 2000), 539,   3, 0.6,  2.0);
+@@ -108,7 +137,7 @@
+ }
+ 
+ 
+-void MapgenV7Params::readParams(const Settings *settings)
++void MapgenV7Params::readParams(Settings *settings)
+ {
+ 	settings->getFlagStrNoEx("mgv7_spflags",  spflags, flagdesc_mapgen_v7);
+ 	settings->getFloatNoEx("mgv7_cave_width", cave_width);
+@@ -122,6 +151,16 @@
+ 	settings->getNoiseParams("mgv7_np_ridge_uwater",    np_ridge_uwater);
+ 	settings->getNoiseParams("mgv7_np_mountain",        np_mountain);
+ 	settings->getNoiseParams("mgv7_np_ridge",           np_ridge);
++
++//freeminer:
++	settings->getS16NoEx("mg_float_islands", float_islands);
++	settings->getNoiseParamsFromGroup("mg_np_float_islands1", np_float_islands1);
++	settings->getNoiseParamsFromGroup("mg_np_float_islands2", np_float_islands2);
++	settings->getNoiseParamsFromGroup("mg_np_float_islands3", np_float_islands3);
++	settings->getNoiseParamsFromGroup("mg_np_layers",         np_layers);
++	paramsj = settings->getJson("mg_params", paramsj);
++//----------
++
+ 	settings->getNoiseParams("mgv7_np_cave1",           np_cave1);
+ 	settings->getNoiseParams("mgv7_np_cave2",           np_cave2);
+ }
+@@ -141,6 +180,16 @@
+ 	settings->setNoiseParams("mgv7_np_ridge_uwater",    np_ridge_uwater);
+ 	settings->setNoiseParams("mgv7_np_mountain",        np_mountain);
+ 	settings->setNoiseParams("mgv7_np_ridge",           np_ridge);
++
++//freeminer:
++	settings->setS16("mg_float_islands", float_islands);
++	settings->setNoiseParams("mg_np_float_islands1", np_float_islands1);
++	settings->setNoiseParams("mg_np_float_islands2", np_float_islands2);
++	settings->setNoiseParams("mg_np_float_islands3", np_float_islands3);
++	settings->setNoiseParams("mg_np_layers",         np_layers);
++	settings->setJson("mg_params", paramsj);
++//----------
++
+ 	settings->setNoiseParams("mgv7_np_cave1",           np_cave1);
+ 	settings->setNoiseParams("mgv7_np_cave2",           np_cave2);
+ }
+@@ -204,6 +253,14 @@
+ 
+ 	blockseed = getBlockSeed2(full_node_min, seed);
+ 
++	//freeminer:
++	if (float_islands && node_max.Y >= float_islands) {
++		float_islands_prepare(node_min, node_max, float_islands);
++	}
++
++	layers_prepare(node_min, node_max);
++	//==========
++
+ 	// Generate base and mountain terrain
+ 	// An initial heightmap is no longer created here for use in generateRidgeTerrain()
+ 	s16 stone_surface_max_y = generateTerrain();
+@@ -219,6 +276,8 @@
+ 	biomegen->calcBiomeNoise(node_min);
+ 	MgStoneType stone_type = generateBiomes();
+ 
++	generateExperimental();
++
+ 	if (flags & MG_CAVES)
+ 		generateCaves(stone_surface_max_y, water_level);
+ 
+@@ -237,7 +296,7 @@
+ 
+ 	//printf("makeChunk: %dms\n", t.stop());
+ 
+-	updateLiquid(&data->transforming_liquid, full_node_min, full_node_max);
++	updateLiquid(full_node_min, full_node_max);
+ 
+ 	if (flags & MG_LIGHT)
+ 		calcLighting(node_min - v3s16(0, 1, 0), node_max + v3s16(0, 1, 0),
+@@ -257,11 +316,15 @@
+ 
+ 	float persist = NoisePerlin2D(&noise_terrain_persist->np, x, z, seed);
+ 
++	auto persist_save = noise_terrain_base->np.persist;
+ 	noise_terrain_base->np.persist = persist;
+ 	float height_base = NoisePerlin2D(&noise_terrain_base->np, x, z, seed);
++	noise_terrain_base->np.persist = persist_save;
+ 
++	persist_save = noise_terrain_alt->np.persist;
+ 	noise_terrain_alt->np.persist = persist;
+ 	float height_alt = NoisePerlin2D(&noise_terrain_alt->np, x, z, seed);
++	noise_terrain_alt->np.persist = persist_save;
+ 
+ 	if (height_alt > height_base)
+ 		return height_alt;
+@@ -308,6 +371,7 @@
+ 	MapNode n_air(CONTENT_AIR);
+ 	MapNode n_stone(c_stone);
+ 	MapNode n_water(c_water_source);
++	MapNode n_ice(c_ice);
+ 
+ 	//// Calculate noise for terrain generation
+ 	noise_terrain_persist->perlinMap2D(node_min.X, node_min.Z);
+@@ -334,20 +398,25 @@
+ 		if (surface_y > stone_surface_max_y)
+ 			stone_surface_max_y = surface_y;
+ 
++		s16 heat = m_emerge->env->m_use_weather ? m_emerge->env->getServerMap().updateBlockHeat(m_emerge->env, v3POS(x,node_max.Y,z), nullptr, &heat_cache) : 0;
++
+ 		u32 vi = vm->m_area.index(x, node_min.Y - 1, z);
+ 		u32 index3d = (z - node_min.Z) * zstride_1u1d + (x - node_min.X);
+ 
+ 		for (s16 y = node_min.Y - 1; y <= node_max.Y + 1; y++) {
+ 			if (vm->m_data[vi].getContent() == CONTENT_IGNORE) {
+ 				if (y <= surface_y) {
+-					vm->m_data[vi] = n_stone;  // Base terrain
++					vm->m_data[vi] = layers_get(index3d);  // Base terrain
+ 				} else if ((spflags & MGV7_MOUNTAINS) &&
+ 						getMountainTerrainFromMap(index3d, index2d, y)) {
+-					vm->m_data[vi] = n_stone;  // Mountain terrain
++					vm->m_data[vi] = layers_get(index3d);  // Mountain terrain
+ 					if (y > stone_surface_max_y)
+ 						stone_surface_max_y = y;
+ 				} else if (y <= water_level) {
+-					vm->m_data[vi] = n_water;
++					//vm->m_data[vi] = n_water;
++					vm->m_data[vi] = (heat < 0 && y > heat/3) ? n_ice : n_water;
++					if (liquid_pressure && y <= 0)
++						vm->m_data[vi].addLevel(m_emerge->ndef, water_level - y, 1);
+ 				} else {
+ 					vm->m_data[vi] = n_air;
+ 				}
+@@ -370,6 +439,7 @@
+ 	noise_ridge_uwater->perlinMap2D(node_min.X, node_min.Z);
+ 
+ 	MapNode n_water(c_water_source);
++	MapNode n_ice(c_ice);
+ 	MapNode n_air(CONTENT_AIR);
+ 	u32 index = 0;
+ 	float width = 0.2;
+@@ -392,7 +462,10 @@
+ 			if (nridge + width_mod * height_mod < 0.6)
+ 				continue;
+ 
+-			vm->m_data[vi] = (y > water_level) ? n_air : n_water;
++			s16 heat = m_emerge->env->m_use_weather ? m_emerge->env->getServerMap().updateBlockHeat(m_emerge->env, v3POS(x,node_max.Y,z), NULL, &heat_cache) : 0;
++			MapNode n_water_or_ice = (heat < 0 && y > water_level + heat/4) ? n_ice : n_water;
++
++			vm->m_data[vi] = (y > water_level) ? n_air : n_water_or_ice;
+ 		}
+ 	}
+ }
+@@ -565,3 +638,11 @@
+ 	}
+ }
+ #endif
++
++
++void MapgenV7::generateExperimental() {
++	if (float_islands)
++		if (float_islands_generate(node_min, node_max, float_islands, vm))
++			dustTopNodes();
++}
++

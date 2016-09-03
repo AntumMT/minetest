@@ -1,0 +1,23 @@
+diff -ruN minetest-master/src/threading/thread.h minetest-freeminer/src/threading/thread.h
+--- minetest-master/src/threading/thread.h	2016-09-03 16:15:52.709779000 -0700
++++ minetest-freeminer/src/threading/thread.h	2016-09-03 15:43:59.830740000 -0700
+@@ -87,6 +87,8 @@
+ 	 */
+ 	bool wait();
+ 
++	void join() { stop(); wait(); };
++
+ 	/*
+ 	 * Returns true if the calling thread is this Thread object.
+ 	 */
+@@ -96,7 +98,10 @@
+ 	inline bool stopRequested() { return m_request_stop; }
+ 
+ #if USE_CPP11_THREADS
++/*
+ 	inline threadid_t getThreadId() { return m_thread_obj->get_id(); }
++*/
++	inline threadid_t getThreadId() { return std::hash<std::thread::id>()(m_thread_obj->get_id()); }
+ 	inline threadhandle_t getThreadHandle() { return m_thread_obj->native_handle(); }
+ #else
+ #  if USE_WIN_THREADS

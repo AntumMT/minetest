@@ -1,0 +1,565 @@
+diff -ruN minetest-master/src/mapblock.cpp minetest-freeminer/src/mapblock.cpp
+--- minetest-master/src/mapblock.cpp	2016-09-03 16:15:52.529778000 -0700
++++ minetest-freeminer/src/mapblock.cpp	2016-09-03 15:43:59.642739000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++mapblock.cpp
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "mapblock.h"
+@@ -25,7 +28,7 @@
+ #include "nodedef.h"
+ #include "nodemetadata.h"
+ #include "gamedef.h"
+-#include "log.h"
++#include "log_types.h"
+ #include "nameidmapping.h"
+ #include "content_mapnode.h" // For legacy name-id mapping
+ #include "content_nodemeta.h" // For legacy deserialization
+@@ -35,6 +38,8 @@
+ #endif
+ #include "util/string.h"
+ #include "util/serialize.h"
++#include "circuit.h"
++#include "profiler.h"
+ 
+ #define PP(x) "("<<(x).X<<","<<(x).Y<<","<<(x).Z<<")"
+ 
+@@ -67,47 +72,66 @@
+ */
+ 
+ MapBlock::MapBlock(Map *parent, v3s16 pos, IGameDef *gamedef, bool dummy):
++		m_uptime_timer_last(0),
+ 		m_parent(parent),
+ 		m_pos(pos),
+ 		m_pos_relative(pos * MAP_BLOCKSIZE),
+ 		m_gamedef(gamedef),
+-		m_modified(MOD_STATE_WRITE_NEEDED),
++		m_modified(MOD_STATE_CLEAN),
+ 		m_modified_reason(MOD_REASON_INITIAL),
+ 		is_underground(false),
+-		m_lighting_expired(true),
+ 		m_day_night_differs(false),
+-		m_day_night_differs_expired(true),
+ 		m_generated(false),
+-		m_timestamp(BLOCK_TIMESTAMP_UNDEFINED),
+ 		m_disk_timestamp(BLOCK_TIMESTAMP_UNDEFINED),
+-		m_usage_timer(0),
+-		m_refcount(0)
++		m_usage_timer(0)
+ {
++	heat = 0;
++	humidity = 0;
++	heat_add = 0;
++	humidity_add = 0;
++	m_timestamp = BLOCK_TIMESTAMP_UNDEFINED;
++	m_changed_timestamp = 0;
++	m_day_night_differs_expired = true;
++	m_lighting_expired = true;
++	m_refcount = 0;
+ 	data = NULL;
+-	if(dummy == false)
++	heat_last_update = 0;
++	humidity_last_update = 0;
++	//if(dummy == false)
+ 		reallocate();
+ 
+ #ifndef SERVER
+ 	mesh = NULL;
++	mesh2 = mesh4 = mesh8 = mesh16 = nullptr;
++	mesh_size = 0;
+ #endif
++	m_next_analyze_timestamp = 0;
++	m_abm_timestamp = 0;
++	content_only = CONTENT_IGNORE;
++	content_only_param1 = content_only_param2 = 0;
++	lighting_broken = 0;
++	usage_timer_multiplier = 1;
+ }
+ 
+ MapBlock::~MapBlock()
+ {
++	//auto lock = lock_unique_rec();
+ #ifndef SERVER
+-	{
+-		//MutexAutoLock lock(mesh_mutex);
++	//delMesh();
++#endif
+ 
+-		if(mesh)
+-		{
+-			delete mesh;
+-			mesh = NULL;
++	for (int i = 0; i <= 100; ++i) {
++		std::unique_lock<Mutex> lock(abm_triggers_mutex, std::try_to_lock);
++		if (!lock.owns_lock()) {
++			std::this_thread::sleep_for(std::chrono::milliseconds(1));
++			continue;
+ 		}
++		abm_triggers.reset();
++		break;
+ 	}
+-#endif
+ 
+-	if(data)
+-		delete[] data;
++	delete data;
++	data = nullptr;
+ }
+ 
+ bool MapBlock::isValidPositionParent(v3s16 p)
+@@ -124,13 +148,15 @@
+ MapNode MapBlock::getNodeParent(v3s16 p, bool *is_valid_position)
+ {
+ 	if (isValidPosition(p) == false)
+-		return m_parent->getNodeNoEx(getPosRelative() + p, is_valid_position);
++		return m_parent->getNodeNoEx(getPosRelative() + p);
+ 
+ 	if (data == NULL) {
+ 		if (is_valid_position)
+ 			*is_valid_position = false;
+ 		return MapNode(CONTENT_IGNORE);
+ 	}
++	auto lock = lock_shared_rec();
++
+ 	if (is_valid_position)
+ 		*is_valid_position = true;
+ 	return data[p.Z * zstride + p.Y * ystride + p.X];
+@@ -157,6 +183,7 @@
+ 	return reason;
+ }
+ 
++#if WTF
+ /*
+ 	Propagates sunlight down through the block.
+ 	Doesn't modify nodes that are not affected by sunlight.
+@@ -179,6 +206,8 @@
+ bool MapBlock::propagateSunlight(std::set<v3s16> & light_sources,
+ 		bool remove_light, bool *black_air_left)
+ {
++	auto lock = lock_unique_rec();
++
+ 	INodeDefManager *nodemgr = m_gamedef->ndef();
+ 
+ 	// Whether the sunlight at the top of the bottom block is valid
+@@ -199,14 +228,9 @@
+ 			bool is_valid_position;
+ 			MapNode n = getNodeParent(v3s16(x, MAP_BLOCKSIZE, z),
+ 				&is_valid_position);
+-			if (is_valid_position)
++			if (n)
+ 			{
+-				if(n.getContent() == CONTENT_IGNORE)
+-				{
+-					// Trust heuristics
+-					no_sunlight = is_underground;
+-				}
+-				else if(n.getLight(LIGHTBANK_DAY, m_gamedef->ndef()) != LIGHT_SUN)
++				if(n.getLight(LIGHTBANK_DAY, m_gamedef->ndef()) != LIGHT_SUN)
+ 				{
+ 					no_sunlight = true;
+ 				}
+@@ -224,7 +248,7 @@
+ 				else
+ 				{
+ 					MapNode n = getNodeNoEx(v3s16(x, MAP_BLOCKSIZE-1, z));
+-					if(m_gamedef->ndef()->get(n).sunlight_propagates == false)
++					if(n && m_gamedef->ndef()->get(n).sunlight_propagates == false)
+ 					{
+ 						no_sunlight = true;
+ 					}
+@@ -327,7 +351,7 @@
+ 			if(block_below_is_valid)
+ 			{
+ 				MapNode n = getNodeParent(v3s16(x, -1, z), &is_valid_position);
+-				if (is_valid_position) {
++				if (n) {
+ 					if(nodemgr->get(n).light_propagates)
+ 					{
+ 						if(n.getLight(LIGHTBANK_DAY, nodemgr) == LIGHT_SUN
+@@ -350,10 +374,12 @@
+ 
+ 	return block_below_is_valid;
+ }
++#endif
+ 
+ 
+ void MapBlock::copyTo(VoxelManipulator &dst)
+ {
++	auto lock = lock_shared_rec();
+ 	v3s16 data_size(MAP_BLOCKSIZE, MAP_BLOCKSIZE, MAP_BLOCKSIZE);
+ 	VoxelArea data_area(v3s16(0,0,0), data_size - v3s16(1,1,1));
+ 
+@@ -364,6 +390,7 @@
+ 
+ void MapBlock::copyFrom(VoxelManipulator &dst)
+ {
++	auto lock = lock_unique_rec();
+ 	v3s16 data_size(MAP_BLOCKSIZE, MAP_BLOCKSIZE, MAP_BLOCKSIZE);
+ 	VoxelArea data_area(v3s16(0,0,0), data_size - v3s16(1,1,1));
+ 
+@@ -389,6 +416,7 @@
+ 	/*
+ 		Check if any lighting value differs
+ 	*/
++	auto lock = lock_shared_rec();
+ 	for (u32 i = 0; i < nodecount; i++) {
+ 		MapNode &n = data[i];
+ 
+@@ -433,6 +461,7 @@
+ 
+ s16 MapBlock::getGroundLevel(v2s16 p2d)
+ {
++	auto lock = lock_shared_rec();
+ 	if(isDummy())
+ 		return -3;
+ 	try
+@@ -509,6 +538,7 @@
+ // Correct ids in the block to match nodedef based on names.
+ // Unknown ones are added to nodedef.
+ // Will not update itself to match id-name pairs in nodedef.
++static Mutex correctBlockNodeIds_mutex;
+ static void correctBlockNodeIds(const NameIdMapping *nimap, MapNode *nodes,
+ 		IGameDef *gamedef)
+ {
+@@ -519,6 +549,7 @@
+ 	// correct ids.
+ 	std::set<content_t> unnamed_contents;
+ 	std::set<std::string> unallocatable_contents;
++	std::lock_guard<Mutex> lock(correctBlockNodeIds_mutex);
+ 	for (u32 i = 0; i < MapBlock::nodecount; i++) {
+ 		content_t local_id = nodes[i].getContent();
+ 		std::string name;
+@@ -554,8 +585,9 @@
+ 	}
+ }
+ 
+-void MapBlock::serialize(std::ostream &os, u8 version, bool disk)
++void MapBlock::serialize(std::ostream &os, u8 version, bool disk, bool use_content_only)
+ {
++	auto lock = lock_shared_rec();
+ 	if(!ser_ver_supported(version))
+ 		throw VersionMismatchException("ERROR: MapBlock format not supported");
+ 
+@@ -575,9 +607,17 @@
+ 	if(m_lighting_expired)
+ 		flags |= 0x04;
+ 	if(m_generated == false)
++	{
+ 		flags |= 0x08;
++		infostream<<" serialize not generated block"<<std::endl;
++	}
++
+ 	writeU8(os, flags);
+ 
++	// fmtodo: check version and dont pack data if more than 20150427 or 0.4.12.7+
++	if (!disk && use_content_only && content_only != CONTENT_IGNORE)
++		return;
++
+ 	/*
+ 		Bulk node data
+ 	*/
+@@ -650,13 +690,15 @@
+ 	if(net_proto_version >= 21){
+ 		int version = 1;
+ 		writeU8(os, version);
+-		writeF1000(os, 0); // deprecated heat
+-		writeF1000(os, 0); // deprecated humidity
++		writeF1000(os, heat + heat_add); // deprecated heat
++		writeF1000(os, humidity + humidity_add); // deprecated humidity
+ 	}
+ }
+ 
+-void MapBlock::deSerialize(std::istream &is, u8 version, bool disk)
++
++bool MapBlock::deSerialize(std::istream &is, u8 version, bool disk)
+ {
++	auto lock = lock_unique_rec();
+ 	if(!ser_ver_supported(version))
+ 		throw VersionMismatchException("ERROR: MapBlock format not supported");
+ 
+@@ -667,7 +709,7 @@
+ 	if(version <= 21)
+ 	{
+ 		deSerialize_pre22(is, version, disk);
+-		return;
++		return true;
+ 	}
+ 
+ 	u8 flags = readU8(is);
+@@ -676,6 +718,19 @@
+ 	m_lighting_expired = (flags & 0x04) ? true : false;
+ 	m_generated = (flags & 0x08) ? false : true;
+ 
++	if (!m_generated) {
++		verbosestream<<"MapBlock::deSerialize(): deserialize not generated block "<<getPos()<<std::endl;
++		//if (disk) m_generated = false; else // uncomment if you want convert old buggy map
++		return false;
++	}
++
++	if (!disk && content_only != CONTENT_IGNORE) {
++		auto n = MapNode(content_only, content_only_param1, content_only_param2);
++		for (u32 i = 0; i < MAP_BLOCKSIZE*MAP_BLOCKSIZE*MAP_BLOCKSIZE; i++)
++			data[i] = n;
++		return true;
++	}
++
+ 	/*
+ 		Bulk node data
+ 	*/
+@@ -706,7 +761,7 @@
+ 			content_nodemeta_deserialize_legacy(iss,
+ 				&m_node_metadata, &m_node_timers,
+ 				m_gamedef->idef());
+-	} catch(SerializationError &e) {
++	} catch(std::exception &e) {
+ 		warningstream<<"MapBlock::deSerialize(): Ignoring an error"
+ 				<<" while deserializing node metadata at ("
+ 				<<PP(getPos())<<": "<<e.what()<<std::endl;
+@@ -736,8 +791,9 @@
+ 		// Timestamp
+ 		TRACESTREAM(<<"MapBlock::deSerialize "<<PP(getPos())
+ 				<<": Timestamp"<<std::endl);
+-		setTimestamp(readU32(is));
++		setTimestampNoChangedFlag(readU32(is));
+ 		m_disk_timestamp = m_timestamp;
++		m_changed_timestamp = (unsigned int)m_timestamp != BLOCK_TIMESTAMP_UNDEFINED ? (unsigned int)m_timestamp : 0;
+ 
+ 		// Dynamically re-set ids based on node names
+ 		TRACESTREAM(<<"MapBlock::deSerialize "<<PP(getPos())
+@@ -751,10 +807,13 @@
+ 					<<": Node timers (ver>=25)"<<std::endl);
+ 			m_node_timers.deSerialize(is, version);
+ 		}
++
++		analyzeContent();
+ 	}
+ 
+ 	TRACESTREAM(<<"MapBlock::deSerialize "<<PP(getPos())
+ 			<<": Done."<<std::endl);
++	return true;
+ }
+ 
+ void MapBlock::deSerializeNetworkSpecific(std::istream &is)
+@@ -764,8 +823,8 @@
+ 		//if(version != 1)
+ 		//	throw SerializationError("unsupported MapBlock version");
+ 		if(version >= 1) {
+-			readF1000(is); // deprecated heat
+-			readF1000(is); // deprecated humidity
++			heat = readF1000(is); // deprecated heat
++			humidity = readF1000(is); // deprecated humidity
+ 		}
+ 	}
+ 	catch(SerializationError &e)
+@@ -775,6 +834,107 @@
+ 	}
+ }
+ 
++	MapNode MapBlock::getNodeNoEx(v3POS p) {
++#ifndef NDEBUG
++		ScopeProfiler sp(g_profiler, "Map: getNodeNoEx");
++#endif
++		auto lock = lock_shared_rec();
++		return getNodeNoLock(p);
++	}
++
++	void MapBlock::setNode(v3POS p, MapNode & n)
++	{
++#ifndef NDEBUG
++		g_profiler->add("Map: setNode", 1);
++#endif
++		//if (!isValidPosition(p.X, p.Y, p.Z))
++		//	return;
++
++		auto nodedef = m_gamedef->ndef();
++		auto index = p.Z*zstride + p.Y*ystride + p.X;
++		const auto &f1 = nodedef->get(n.getContent());
++
++		auto lock = lock_unique_rec();
++
++		const auto &f0 = nodedef->get(data[index].getContent());
++
++		data[index] = n;
++
++		modified_light light = modified_light_no;
++		if (f0.light_propagates != f1.light_propagates || f0.solidness != f1.solidness || f0.light_source != f1.light_source) /*|| f0.drawtype != f1.drawtype*/
++			light = modified_light_yes;
++		raiseModified(MOD_STATE_WRITE_NEEDED, light);
++	}
++
++	void MapBlock::raiseModified(u32 mod, modified_light light)
++	{
++		if(mod >= MOD_STATE_WRITE_NEEDED /*&& m_timestamp != BLOCK_TIMESTAMP_UNDEFINED*/) {
++			m_changed_timestamp = (unsigned int)m_parent->time_life;
++		}
++		if(mod > m_modified){
++			m_modified = mod;
++			if(m_modified >= MOD_STATE_WRITE_AT_UNLOAD)
++				m_disk_timestamp = m_timestamp;
++		}
++		if (light == modified_light_yes)
++			setLightingExpired(true);
++	}
++
++void MapBlock::pushElementsToCircuit(Circuit* circuit)
++{
++}
++
++	content_t MapBlock::analyzeContent() {
++		auto lock = lock_shared_rec();
++		content_only = data[0].param0;
++		content_only_param1 = data[0].param1;
++		content_only_param2 = data[0].param2;
++		for (int i = 1; i<MAP_BLOCKSIZE*MAP_BLOCKSIZE*MAP_BLOCKSIZE; ++i) {
++			if (data[i].param0 != content_only || data[i].param1 != content_only_param1 || data[i].param2 != content_only_param2) {
++				content_only = CONTENT_IGNORE;
++				break;
++			}
++		}
++		return content_only;
++	}
++
++
++#ifndef SERVER
++MapBlock::mesh_type MapBlock::getMesh(int step) {
++	if (step >= 16 && mesh16) return mesh16;
++	if (step >= 8  && mesh8)  return mesh8;
++	if (step >= 4  && mesh4)  return mesh4;
++	if (step >= 2  && mesh2)  return mesh2;
++	if (step >= 1  && mesh)   return mesh;
++	if (mesh2)  return mesh2;
++	if (mesh4)  return mesh4;
++	if (mesh8)  return mesh8;
++	if (mesh16) return mesh16;
++	return mesh;
++}
++
++void MapBlock::setMesh(MapBlock::mesh_type & rmesh) {
++	if (rmesh && !mesh_size)
++		mesh_size = rmesh->getMesh()->getMeshBufferCount();
++	     if (rmesh->step == 16) {mesh_old = mesh16; mesh16 = rmesh;}
++	else if (rmesh->step == 8 ) {mesh_old = mesh8;  mesh8  = rmesh;}
++	else if (rmesh->step == 4 ) {mesh_old = mesh4;  mesh4  = rmesh;}
++	else if (rmesh->step == 2 ) {mesh_old = mesh2;  mesh2  = rmesh;}
++	else                        {mesh_old = mesh;   mesh   = rmesh;}
++}
++
++/*
++void MapBlock::delMesh() {
++	if (mesh16) {mesh16 = nullptr;}
++	if (mesh8)  {mesh8  = nullptr;}
++	if (mesh4)  {mesh4  = nullptr;}
++	if (mesh2)  {mesh2  = nullptr;}
++	if (mesh)   {mesh   = nullptr;}
++}
++*/
++#endif
++
++
+ /*
+ 	Legacy serialization
+ */
+@@ -890,7 +1050,7 @@
+ 						&m_node_metadata, &m_node_timers,
+ 						m_gamedef->idef());
+ 				}
+-			} catch(SerializationError &e) {
++			} catch(std::exception &e) {
+ 				warningstream<<"MapBlock::deSerialize(): Ignoring an error"
+ 						<<" while deserializing node metadata"<<std::endl;
+ 			}
+@@ -988,6 +1148,40 @@
+ 
+ }
+ 
++void MapBlock::incrementUsageTimer(float dtime)
++{
++	std::lock_guard<Mutex> lock(m_usage_timer_mutex);
++	m_usage_timer += dtime * usage_timer_multiplier;
++}
++
++/* here for errorstream
++	void MapBlock::setTimestamp(u32 time)
++	{
++//infostream<<"setTimestamp = "<< time <<std::endl;
++		m_timestamp = time;
++		raiseModified(MOD_STATE_WRITE_AT_UNLOAD, "setTimestamp");
++	}
++
++	void MapBlock::setTimestampNoChangedFlag(u32 time)
++	{
++//infostream<<"setTimestampNoChangedFlag = "<< time <<std::endl;
++		m_timestamp = time;
++	}
++
++	void MapBlock::raiseModified(u32 mod)
++	{
++		if(mod >= m_modified){
++			m_modified = mod;
++			if(m_modified >= MOD_STATE_WRITE_AT_UNLOAD)
++				m_disk_timestamp = m_timestamp;
++			if(m_modified >= MOD_STATE_WRITE_NEEDED) {
++//infostream<<"raiseModified = "<< m_changed_timestamp << "=> "<<m_timestamp<<std::endl;
++				m_changed_timestamp = m_timestamp;
++			}
++		}
++	}
++*/
++
+ /*
+ 	Get a quick string to describe what a block actually contains
+ */
+@@ -996,6 +1190,7 @@
+ 	if(block == NULL)
+ 		return "NULL";
+ 
++	auto lock = block->lock_shared_rec();
+ 	std::ostringstream desc;
+ 
+ 	v3s16 p = block->getPos();
+@@ -1017,7 +1212,7 @@
+ 	default:
+ 		desc<<"unknown getModified()="+itos(block->getModified())+", ";
+ 	}
+-
++	desc<<" changed_timestamp="<<block->m_changed_timestamp<<", ";
+ 	if(block->isGenerated())
+ 		desc<<"is_gen [X], ";
+ 	else
+@@ -1079,6 +1274,8 @@
+ 
+ 		desc<<"}, ";
+ 	}
++	
++	//desc<<" modifiedBy="<<block->getModifiedReason()<<"; "; // only with raiseModified(..., string)
+ 
+ 	return desc.str().substr(0, desc.str().size()-2);
+ }

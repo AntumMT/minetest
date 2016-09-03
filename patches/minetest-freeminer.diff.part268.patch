@@ -1,0 +1,70 @@
+diff -ruN minetest-master/src/guiChatConsole.h minetest-freeminer/src/guiChatConsole.h
+--- minetest-master/src/guiChatConsole.h	2016-09-03 16:15:52.501778000 -0700
++++ minetest-freeminer/src/guiChatConsole.h	2016-09-03 15:43:59.870740000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++guiChatConsole.h
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #ifndef GUICHATCONSOLE_HEADER
+@@ -25,6 +28,8 @@
+ #include "chat.h"
+ #include "config.h"
+ 
++#include "xCGUITTFont.h"
++
+ class Client;
+ 
+ class GUIChatConsole : public gui::IGUIElement
+@@ -41,7 +46,7 @@
+ 	// Open the console (height = desired fraction of screen size)
+ 	// This doesn't open immediately but initiates an animation.
+ 	// You should call isOpenInhibited() before this.
+-	void openConsole(f32 height);
++	void openConsole(float height);
+ 
+ 	bool isOpen() const;
+ 
+@@ -70,11 +75,15 @@
+ 		f32 blink_speed = 1.0,
+ 		f32 relative_height = 1.0);
+ 
++	void setPrompt(const std::wstring& input);
++
+ 	// Irrlicht draw method
+ 	virtual void draw();
+ 
+ 	bool canTakeFocus(gui::IGUIElement* element) { return false; }
+ 
++	bool getAndroidUIInput();
++
+ 	virtual bool OnEvent(const SEvent& event);
+ 
+ 	virtual void setVisible(bool visible);

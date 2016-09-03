@@ -1,0 +1,135 @@
+diff -ruN minetest-master/src/subgame.cpp minetest-freeminer/src/subgame.cpp
+--- minetest-master/src/subgame.cpp	2016-09-03 16:15:52.561779000 -0700
++++ minetest-freeminer/src/subgame.cpp	2016-09-03 15:43:59.662739000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++subgame.cpp
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "subgame.h"
+@@ -30,6 +33,8 @@
+ #ifndef SERVER
+ 	#include "client/tile.h" // getImagePath
+ #endif
++#include "util/string.h"
++#include "config.h"
+ 
+ bool getGameMinetestConfig(const std::string &game_path, Settings &conf)
+ {
+@@ -88,13 +93,13 @@
+ 	}
+ 
+ 	find_paths.push_back(GameFindPath(
+-			user + DIR_DELIM + "games" + DIR_DELIM + id + "_game", true));
++			user + DIR_DELIM + "games" + GAMES_VERSION + DIR_DELIM + id + "_game", true));
+ 	find_paths.push_back(GameFindPath(
+-			user + DIR_DELIM + "games" + DIR_DELIM + id, true));
++			user + DIR_DELIM + "games" + GAMES_VERSION + DIR_DELIM + id, true));
+ 	find_paths.push_back(GameFindPath(
+-			share + DIR_DELIM + "games" + DIR_DELIM + id + "_game", false));
++			share + DIR_DELIM + "games" + GAMES_VERSION + DIR_DELIM + id + "_game", false));
+ 	find_paths.push_back(GameFindPath(
+-			share + DIR_DELIM + "games" + DIR_DELIM + id, false));
++			share + DIR_DELIM + "games" + GAMES_VERSION + DIR_DELIM + id, false));
+ 	// Find game directory
+ 	std::string game_path;
+ 	bool user_game = true; // Game is in user's directory
+@@ -148,8 +153,8 @@
+ {
+ 	std::set<std::string> gameids;
+ 	std::set<std::string> gamespaths;
+-	gamespaths.insert(porting::path_share + DIR_DELIM + "games");
+-	gamespaths.insert(porting::path_user + DIR_DELIM + "games");
++	gamespaths.insert(porting::path_share + DIR_DELIM + "games" + GAMES_VERSION);
++	gamespaths.insert(porting::path_user + DIR_DELIM + "games" + GAMES_VERSION);
+ 
+ 	Strfnd search_paths(getSubgamePathEnv());
+ 
+@@ -192,7 +197,7 @@
+ 
+ bool getWorldExists(const std::string &world_path)
+ {
+-	return (fs::PathExists(world_path + DIR_DELIM + "map_meta.txt") ||
++	return (fs::PathExists(world_path + DIR_DELIM + "map_meta.json") ||
+ 			fs::PathExists(world_path + DIR_DELIM + "world.mt"));
+ }
+ 
+@@ -204,7 +209,7 @@
+ 	if(!succeeded){
+ 		if(can_be_legacy){
+ 			// If map_meta.txt exists, it is probably an old minetest world
+-			if(fs::PathExists(world_path + DIR_DELIM + "map_meta.txt"))
++			if(fs::PathExists(world_path + DIR_DELIM + "map_meta.json") || fs::PathExists(world_path + DIR_DELIM + "map_meta.txt"))
+ 				return LEGACY_GAMEID;
+ 		}
+ 		return "";
+@@ -293,7 +298,11 @@
+ 	if (!fs::PathExists(worldmt_path)) {
+ 		std::ostringstream ss(std::ios_base::binary);
+ 		ss << "gameid = " << gamespec.id
+-			<< "\nbackend = sqlite3"
++#if USE_LEVELDB
++				<< "\nbackend = leveldb"
++#elif USE_SQLITE3
++				<< "\nbackend = sqlite3"
++#endif
+ 			<< "\ncreative_mode = " << g_settings->get("creative_mode")
+ 			<< "\nenable_damage = " << g_settings->get("enable_damage")
+ 			<< "\n";
+@@ -303,10 +312,11 @@
+ 		infostream << "Wrote world.mt (" << worldmt_path << ")" << std::endl;
+ 	}
+ 
++/* fmtodo: enable after remake layers params
+ 	// Create map_meta.txt if does not already exist
+-	std::string map_meta_path = path + DIR_DELIM + "map_meta.txt";
++	std::string map_meta_path = path + DIR_DELIM + "map_meta.json";
+ 	if (!fs::PathExists(map_meta_path)){
+-		verbosestream << "Creating map_meta.txt (" << map_meta_path << ")" << std::endl;
++		verbosestream << "Creating map_meta.json (" << map_meta_path << ")" << std::endl;
+ 		fs::CreateAllDirs(path);
+ 		std::ostringstream oss(std::ios_base::binary);
+ 
+@@ -315,11 +325,13 @@
+ 
+ 		params.readParams(g_settings);
+ 		params.writeParams(&conf);
++		conf.writeJsonFile(map_meta_path);
++/ *
+ 		conf.writeLines(oss);
+ 		oss << "[end_of_params]\n";
+-
++* /
+ 		fs::safeWriteToFile(map_meta_path, oss.str());
+ 	}
++*/
+ 	return true;
+ }
+-

@@ -1,0 +1,38 @@
+diff -ruN minetest-master/build/osx/releases/Info.plist minetest-freeminer/build/osx/releases/Info.plist
+--- minetest-master/build/osx/releases/Info.plist	1969-12-31 16:00:00.000000000 -0800
++++ minetest-freeminer/build/osx/releases/Info.plist	2016-09-03 15:43:59.862740000 -0700
+@@ -0,0 +1,34 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
++<plist version="1.0">
++<dict>
++	<key>CFBundleDevelopmentRegion</key>
++	<string>English</string>
++	<key>CFBundleExecutable</key>
++	<string>freeminer</string>
++	<key>CFBundleIconFile</key>
++	<string>freeminer.icns</string>
++	<key>CFBundleIdentifier</key>
++	<string>freeminer.freeminer</string>
++	<key>CFBundleInfoDictionaryVersion</key>
++	<string>6.0</string>
++	<key>CFBundleName</key>
++	<string>freeminer</string>
++	<key>CFBundlePackageType</key>
++	<string>APPL</string>
++	<key>CFBundleShortVersionString</key>
++	<string>GIT_VERSION</string>
++	<key>CFBundleSignature</key>
++	<string>????</string>
++	<key>CFBundleVersion</key>
++	<string>GIT_VERSION</string>
++	<key>LSApplicationCategoryType</key>
++	<string>public.app-category.games</string>
++	<key>LSMinimumSystemVersion</key>
++	<string>MACOSX_DEPLOYMENT_TARGET</string>
++	<key>NSMainNibFile</key>
++	<string>MainMenu</string>
++	<key>NSPrincipalClass</key>
++	<string>NSApplication</string>
++</dict>
++</plist>

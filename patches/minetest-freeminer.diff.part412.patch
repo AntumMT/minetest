@@ -1,0 +1,211 @@
+diff -ruN minetest-master/src/porting_android.cpp minetest-freeminer/src/porting_android.cpp
+--- minetest-master/src/porting_android.cpp	2016-09-03 16:15:52.681779000 -0700
++++ minetest-freeminer/src/porting_android.cpp	2016-09-03 15:43:59.810740000 -0700
+@@ -33,6 +33,8 @@
+ #include <exception>
+ #include <stdlib.h>
+ 
++#include "settings.h"
++
+ #ifdef GPROF
+ #include "prof.h"
+ #endif
+@@ -51,12 +53,16 @@
+ 		char *argv[] = {strdup(PROJECT_NAME), NULL};
+ 		main(ARRLEN(argv) - 1, argv);
+ 		free(argv[0]);
++#if !EXEPTION_DEBUG
+ 	} catch (std::exception &e) {
+ 		errorstream << "Uncaught exception in main thread: " << e.what() << std::endl;
+ 		retval = -1;
+ 	} catch (...) {
+ 		errorstream << "Uncaught exception in main thread!" << std::endl;
+ 		retval = -1;
++#else
++	} catch (int) { // impossible
++#endif
+ 	}
+ 
+ 	porting::cleanupAndroid();
+@@ -69,10 +75,10 @@
+ /* TODO this doesn't work as expected, no idea why but there's a workaround   */
+ /* for it right now */
+ extern "C" {
+-	JNIEXPORT void JNICALL Java_net_minetest_MtNativeActivity_putMessageBoxResult(
++	JNIEXPORT void JNICALL Java_org_freeminer_MtNativeActivity_putMessageBoxResult(
+ 			JNIEnv * env, jclass thiz, jstring text)
+ 	{
+-		errorstream << "Java_net_minetest_MtNativeActivity_putMessageBoxResult got: "
++		errorstream << "Java_net_freeminer_MtNativeActivity_putMessageBoxResult got: "
+ 				<< std::string((const char*)env->GetStringChars(text,0))
+ 				<< std::endl;
+ 	}
+@@ -86,6 +92,8 @@
+ JNIEnv*      jnienv;
+ jclass       nativeActivity;
+ 
++int android_version_sdk_int = 0;
++
+ jclass findClass(std::string classname)
+ {
+ 	if (jnienv == 0) {
+@@ -136,7 +144,7 @@
+ 		exit(-1);
+ 	}
+ 
+-	nativeActivity = findClass("net/minetest/minetest/MtNativeActivity");
++	nativeActivity = findClass("org/freeminer/" PROJECT_NAME_C "/MtNativeActivity");
+ 	if (nativeActivity == 0) {
+ 		errorstream <<
+ 			"porting::initAndroid unable to find java native activity class" <<
+@@ -147,10 +155,26 @@
+ 	/* in the start-up code */
+ 	__android_log_print(ANDROID_LOG_ERROR, PROJECT_NAME_C,
+ 			"Initializing GPROF profiler");
+-	monstartup("libminetest.so");
++	monstartup("libfreeminer.so");
+ #endif
++
++	{
++		// https://code.google.com/p/android/issues/detail?id=40753
++		// http://stackoverflow.com/questions/10196361/how-to-check-the-device-running-api-level-using-c-code-via-ndk
++		// http://developer.android.com/reference/android/os/Build.VERSION_CODES.html#JELLY_BEAN_MR2
++		jclass versionClass = porting::jnienv->FindClass("android/os/Build$VERSION");
++		if (versionClass) {
++			jfieldID sdkIntFieldID = porting::jnienv->GetStaticFieldID(versionClass, "SDK_INT", "I");
++			if (sdkIntFieldID) {
++				android_version_sdk_int = porting::jnienv->GetStaticIntField(versionClass, sdkIntFieldID);
++				infostream << "Android version = "<< android_version_sdk_int << std::endl;
++			}
++		}
++	}
++
+ }
+ 
++
+ void cleanupAndroid()
+ {
+ 
+@@ -161,7 +185,9 @@
+ #endif
+ 
+ 	JavaVM *jvm = app_global->activity->vm;
++	if (jvm)
+ 	jvm->DetachCurrentThread();
++	ANativeActivity_finish(app_global->activity);
+ }
+ 
+ static std::string javaStringToUTF8(jstring js)
+@@ -217,8 +243,13 @@
+ 			cls_File, mt_getAbsPath, "getCacheDir");
+ 	path_storage = getAndroidPath(cls_Env, NULL, cls_File, mt_getAbsPath,
+ 			"getExternalStorageDirectory");
++/*
+ 	path_user    = path_storage + DIR_DELIM + PROJECT_NAME_C;
+ 	path_share   = path_storage + DIR_DELIM + PROJECT_NAME_C;
++*/
++	path_user    = path_storage + DIR_DELIM + PROJECT_NAME;
++	path_share   = path_storage + DIR_DELIM + PROJECT_NAME;
++	path_locale  = path_share + DIR_DELIM + "locale";
+ 
+ 	migrateCachePath();
+ }
+@@ -293,6 +324,38 @@
+ 	return value;
+ }
+ 
++float get_dpi() {
++	static bool firstrun = true;
++	static float value = 0;
++
++	if (firstrun) {
++		auto method = jnienv->GetMethodID(nativeActivity, "get_ydpi", "()F");
++
++		if (!method)
++			return 160;
++
++		value = jnienv->CallFloatMethod(app_global->activity->clazz, method);
++		firstrun = false;
++	}
++	return value;
++}
++
++int get_densityDpi() {
++	static bool firstrun = true;
++	static int value = 0;
++
++	if (firstrun) {
++		auto method = jnienv->GetMethodID(nativeActivity, "get_densityDpi", "()I");
++
++		if (!method)
++			return 160;
++
++		value = jnienv->CallFloatMethod(app_global->activity->clazz, method);
++		firstrun = false;
++	}
++	return value;
++}
++
+ v2u32 getDisplaySize()
+ {
+ 	static bool firstrun = true;
+@@ -324,4 +387,59 @@
+ 	return retval;
+ }
+ #endif // ndef SERVER
++
++
++int canKeyboard() {
++	auto v = g_settings->getS32("android_keyboard");
++	if (v)
++		return v;
++	// dont work on some 4.4.2
++	//if (porting::android_version_sdk_int >= 18)
++	//	return 1;
++	return false;
++}
++
++// http://stackoverflow.com/questions/5864790/how-to-show-the-soft-keyboard-on-native-activity
++void displayKeyboard(bool pShow, android_app* mApplication, JNIEnv* lJNIEnv) {
++    jint lFlags = 0;
++
++    // Retrieves NativeActivity.
++    jobject lNativeActivity = mApplication->activity->clazz;
++    jclass ClassNativeActivity = lJNIEnv->GetObjectClass(lNativeActivity);
++
++    // Retrieves Context.INPUT_METHOD_SERVICE.
++    jclass ClassContext = lJNIEnv->FindClass("android/content/Context");
++    jfieldID FieldINPUT_METHOD_SERVICE = lJNIEnv->GetStaticFieldID(ClassContext, "INPUT_METHOD_SERVICE", "Ljava/lang/String;");
++    jobject INPUT_METHOD_SERVICE = lJNIEnv->GetStaticObjectField(ClassContext, FieldINPUT_METHOD_SERVICE);
++    //jniCheck(INPUT_METHOD_SERVICE);
++
++    // Runs getSystemService(Context.INPUT_METHOD_SERVICE).
++    jclass ClassInputMethodManager = lJNIEnv->FindClass("android/view/inputmethod/InputMethodManager");
++    jmethodID MethodGetSystemService = lJNIEnv->GetMethodID(ClassNativeActivity, "getSystemService","(Ljava/lang/String;)Ljava/lang/Object;");
++    jobject lInputMethodManager = lJNIEnv->CallObjectMethod(lNativeActivity, MethodGetSystemService,INPUT_METHOD_SERVICE);
++
++    // Runs getWindow().getDecorView().
++    jmethodID MethodGetWindow = lJNIEnv->GetMethodID(ClassNativeActivity, "getWindow","()Landroid/view/Window;");
++    jobject lWindow = lJNIEnv->CallObjectMethod(lNativeActivity,MethodGetWindow);
++    jclass ClassWindow = lJNIEnv->FindClass("android/view/Window");
++    jmethodID MethodGetDecorView = lJNIEnv->GetMethodID(ClassWindow, "getDecorView", "()Landroid/view/View;");
++    jobject lDecorView = lJNIEnv->CallObjectMethod(lWindow,MethodGetDecorView);
++
++    if (pShow) {
++        // Runs lInputMethodManager.showSoftInput(...).
++        jmethodID MethodShowSoftInput = lJNIEnv->GetMethodID(ClassInputMethodManager, "showSoftInput","(Landroid/view/View;I)Z");
++        jboolean lResult = lJNIEnv->CallBooleanMethod(lInputMethodManager, MethodShowSoftInput,lDecorView, lFlags);
++    } else {
++        // Runs lWindow.getViewToken()
++        jclass ClassView = lJNIEnv->FindClass("android/view/View");
++        jmethodID MethodGetWindowToken = lJNIEnv->GetMethodID(ClassView, "getWindowToken", "()Landroid/os/IBinder;");
++        jobject lBinder = lJNIEnv->CallObjectMethod(lDecorView,MethodGetWindowToken);
++
++        // lInputMethodManager.hideSoftInput(...).
++        jmethodID MethodHideSoftInput = lJNIEnv->GetMethodID(ClassInputMethodManager, "hideSoftInputFromWindow","(Landroid/os/IBinder;I)Z");
++        jboolean lRes = lJNIEnv->CallBooleanMethod(lInputMethodManager, MethodHideSoftInput,lBinder, lFlags);
++    }
++}
++
++
+ }

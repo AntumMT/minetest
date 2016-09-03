@@ -1,0 +1,56 @@
+diff -ruN minetest-master/src/script/common/c_internal.cpp minetest-freeminer/src/script/common/c_internal.cpp
+--- minetest-master/src/script/common/c_internal.cpp	2016-09-03 16:15:52.681779000 -0700
++++ minetest-freeminer/src/script/common/c_internal.cpp	2016-09-03 15:43:59.814740000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++script/common/c_internal.cpp
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "common/c_internal.h"
+@@ -121,7 +124,8 @@
+ 			+ itos(lua_gc(L, LUA_GCCOUNT, 0) >> 10) + " MB";
+ 	}
+ 
+-	throw LuaError(err_msg);
++	//throw LuaError(err_msg);
++	errorstream<<"lua exception: " << err_msg << std::endl;
+ }
+ 
+ // Push the list of callbacks (a lua table).
+@@ -133,7 +137,8 @@
+ void script_run_callbacks_f(lua_State *L, int nargs,
+ 	RunCallbacksMode mode, const char *fxn)
+ {
+-	FATAL_ERROR_IF(lua_gettop(L) < nargs + 1, "Not enough arguments");
++	if (lua_gettop(L) < nargs + 1)
++		return;
+ 
+ 	// Insert error handler
+ 	PUSH_ERROR_HANDLER(L);

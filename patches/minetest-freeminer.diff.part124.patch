@@ -1,0 +1,20 @@
+diff -ruN minetest-master/cmake/Modules/FindIconv.cmake minetest-freeminer/cmake/Modules/FindIconv.cmake
+--- minetest-master/cmake/Modules/FindIconv.cmake	1969-12-31 16:00:00.000000000 -0800
++++ minetest-freeminer/cmake/Modules/FindIconv.cmake	2016-09-03 15:43:59.902741000 -0700
+@@ -0,0 +1,16 @@
++mark_as_advanced(ICONV_INCLUDE_DIR ICONV_LIBRARY)
++find_path(ICONV_INCLUDE_DIR iconv.h)
++
++if(APPLE)
++	find_library(ICONV_LIBRARY
++		NAMES libiconv.dylib
++		PATHS "/usr/lib"
++		DOC "IConv library")
++endif(APPLE)
++
++if(${CMAKE_SYSTEM_NAME} MATCHES "BSD")
++	FIND_LIBRARY(ICONV_LIBRARY NAMES iconv)
++endif()
++
++#include(FindPackageHandleStandardArgs)
++#find_package_handle_standard_args(iconv DEFAULT_MSG ICONV_INCLUDE_DIR)

@@ -1,0 +1,11 @@
+diff -ruN minetest-master/src/script/lua_api/CMakeLists.txt minetest-freeminer/src/script/lua_api/CMakeLists.txt
+--- minetest-master/src/script/lua_api/CMakeLists.txt	2016-09-03 16:15:52.625779000 -0700
++++ minetest-freeminer/src/script/lua_api/CMakeLists.txt	2016-09-03 15:43:59.954741000 -0700
+@@ -5,6 +5,7 @@
+ 	${CMAKE_CURRENT_SOURCE_DIR}/l_env.cpp
+ 	${CMAKE_CURRENT_SOURCE_DIR}/l_inventory.cpp
+ 	${CMAKE_CURRENT_SOURCE_DIR}/l_item.cpp
++	${CMAKE_CURRENT_SOURCE_DIR}/l_key_value_storage.cpp
+ 	${CMAKE_CURRENT_SOURCE_DIR}/l_mapgen.cpp
+ 	${CMAKE_CURRENT_SOURCE_DIR}/l_nodemeta.cpp
+ 	${CMAKE_CURRENT_SOURCE_DIR}/l_nodetimer.cpp

@@ -1,0 +1,63 @@
+diff -ruN minetest-master/src/script/cpp_api/s_env.cpp minetest-freeminer/src/script/cpp_api/s_env.cpp
+--- minetest-master/src/script/cpp_api/s_env.cpp	2016-09-03 16:15:52.521778000 -0700
++++ minetest-freeminer/src/script/cpp_api/s_env.cpp	2016-09-03 15:43:59.886740000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++script/cpp_api/s_env.cpp
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "cpp_api/s_env.h"
+@@ -43,6 +46,11 @@
+ 
+ void ScriptApiEnv::environment_Step(float dtime)
+ {
++
++	RecursiveMutexAutoLock testscriptlock(m_luastackmutex, std::try_to_lock);
++	if (!testscriptlock.owns_lock())
++		return;
++
+ 	SCRIPTAPI_PRECHECKHEADER
+ 	//infostream << "scriptapi_environment_step" << std::endl;
+ 
+@@ -144,10 +152,14 @@
+ 		int trigger_chance = 50;
+ 		getintfield(L, current_abm, "chance", trigger_chance);
+ 
++		int neighbors_range = 1;
++		getintfield(L, current_abm, "neighbors_range", neighbors_range);
++
+ 		bool simple_catch_up = true;
+ 		getboolfield(L, current_abm, "catch_up", simple_catch_up);
+ 
+ 		LuaABM *abm = new LuaABM(L, id, trigger_contents, required_neighbors,
++			neighbors_range,
+ 			trigger_interval, trigger_chance, simple_catch_up);
+ 
+ 		env->addActiveBlockModifier(abm);

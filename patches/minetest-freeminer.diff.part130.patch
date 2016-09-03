@@ -1,0 +1,67 @@
+diff -ruN minetest-master/cmake/Modules/FindOpenGLES2.cmake minetest-freeminer/cmake/Modules/FindOpenGLES2.cmake
+--- minetest-master/cmake/Modules/FindOpenGLES2.cmake	2016-09-03 16:15:52.561779000 -0700
++++ minetest-freeminer/cmake/Modules/FindOpenGLES2.cmake	2016-09-03 15:43:59.902741000 -0700
+@@ -39,6 +39,7 @@
+ 	find_path(OPENGLES2_INCLUDE_DIR GLES2/gl2.h
+ 		PATHS /usr/openwin/share/include
+ 			/opt/graphics/OpenGL/include
++			/opt/vc/include
+ 			/usr/X11R6/include
+ 			/usr/include
+ 	)
+@@ -48,6 +49,20 @@
+ 		PATHS /opt/graphics/OpenGL/lib
+ 			/usr/openwin/lib
+ 			/usr/shlib /usr/X11R6/lib
++			/opt/vc/lib
++			/usr/lib/aarch64-linux-gnu
++			/usr/lib/arm-linux-gnueabihf
++			/usr/lib
++	)
++
++	find_library(OPENGLES1_gl_LIBRARY
++		NAMES GLESv1_CM
++		PATHS /opt/graphics/OpenGL/lib
++			/usr/openwin/lib
++			/usr/shlib /usr/X11R6/lib
++			/opt/vc/lib
++			/usr/lib/aarch64-linux-gnu
++			/usr/lib/arm-linux-gnueabihf
+ 			/usr/lib
+ 	)
+ 
+@@ -55,6 +70,7 @@
+ 		find_path(EGL_INCLUDE_DIR EGL/egl.h
+ 			PATHS /usr/openwin/share/include
+ 				/opt/graphics/OpenGL/include
++				/opt/vc/include
+ 				/usr/X11R6/include
+ 				/usr/include
+ 		)
+@@ -65,6 +81,9 @@
+ 				/usr/openwin/lib
+ 				/usr/shlib
+ 				/usr/X11R6/lib
++				/opt/vc/lib
++				/usr/lib/aarch64-linux-gnu
++				/usr/lib/arm-linux-gnueabihf
+ 				/usr/lib
+ 		)
+ 
+@@ -82,7 +101,7 @@
+ 	endif()
+ endif()
+ 
+-set(OPENGLES2_LIBRARIES ${OPENGLES2_LIBRARIES} ${OPENGLES2_LIBRARY})
++set(OPENGLES2_LIBRARIES ${OPENGLES2_LIBRARIES} ${OPENGLES2_LIBRARY} ${OPENGLES1_gl_LIBRARY})
+ 
+ if(BUILD_ANDROID)
+ 	if(OPENGLES2_LIBRARY)
+@@ -100,6 +119,7 @@
+ mark_as_advanced(
+ 	OPENGLES2_INCLUDE_DIR
+ 	OPENGLES2_LIBRARY
++	OPENGLES1_gl_LIBRARY
+ 	EGL_INCLUDE_DIR
+ 	EGL_LIBRARY
+ )

@@ -1,0 +1,75 @@
+diff -ruN minetest-master/src/database-sqlite3.cpp minetest-freeminer/src/database-sqlite3.cpp
+--- minetest-master/src/database-sqlite3.cpp	2016-09-03 16:15:52.561779000 -0700
++++ minetest-freeminer/src/database-sqlite3.cpp	2016-09-03 15:43:59.658739000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++database-sqlite3.cpp
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ /*
+@@ -65,6 +68,7 @@
+ #define FINALIZE_STATEMENT(statement) SQLOK_ERRSTREAM(sqlite3_finalize(statement), \
+ 	"Failed to finalize " #statement)
+ 
++#if USE_SQLITE3
+ int Database_SQLite3::busyHandler(void *data, int count)
+ {
+ 	s64 &first_time = reinterpret_cast<s64 *>(data)[0];
+@@ -110,7 +114,6 @@
+ 	return cur_time - first_time < BUSY_FATAL_TRESHOLD;
+ }
+ 
+-
+ Database_SQLite3::Database_SQLite3(const std::string &savedir) :
+ 	m_initialized(false),
+ 	m_savedir(savedir),
+@@ -218,6 +221,8 @@
+ 
+ bool Database_SQLite3::saveBlock(const v3s16 &pos, const std::string &data)
+ {
++	std::lock_guard<Mutex> lock(mutex);
++
+ 	verifyDatabase();
+ 
+ #ifdef __ANDROID__
+@@ -245,6 +250,8 @@
+ 
+ void Database_SQLite3::loadBlock(const v3s16 &pos, std::string *block)
+ {
++	std::lock_guard<Mutex> lock(mutex);
++
+ 	verifyDatabase();
+ 
+ 	bindPos(m_stmt_read, pos);
+@@ -298,3 +305,4 @@
+ 	SQLOK_ERRSTREAM(sqlite3_close(m_database), "Failed to close database");
+ }
+ 
++#endif

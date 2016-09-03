@@ -1,0 +1,24 @@
+diff -ruN minetest-master/cmake/Modules/FindJson.cmake minetest-freeminer/cmake/Modules/FindJson.cmake
+--- minetest-master/cmake/Modules/FindJson.cmake	2016-09-03 16:15:52.717779000 -0700
++++ minetest-freeminer/cmake/Modules/FindJson.cmake	2016-09-03 15:44:00.022741000 -0700
+@@ -19,9 +19,16 @@
+ endif()
+ 
+ if(NOT JSONCPP_FOUND)
+-	message(STATUS "Using bundled JSONCPP library.")
+-	set(JSON_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/jsoncpp)
+-	set(JSON_LIBRARY jsoncpp)
+-	add_subdirectory(jsoncpp/json)
++	option(JSONCPP_WITH_PKGCONFIG_SUPPORT OFF)
++	option(JSONCPP_WITH_TESTS OFF)
++	option(JSONCPP_WITH_POST_BUILD_UNITTEST OFF)
++	option(JSONCPP_WITH_WARNING_AS_ERROR OFF)
++	add_subdirectory(jsoncpp)
++	message(STATUS "Using bundled JSONCPP library. ${jsoncpp_BINARY_DIR}")
++	set(JSON_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/jsoncpp/include)
++	set(JSON_LIBRARY jsoncpp_lib_static)
++	#set(JSON_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/jsoncpp)
++	#set(JSON_LIBRARY jsoncpp)
++	#add_subdirectory(jsoncpp/json)
+ endif()
+ 

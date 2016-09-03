@@ -1,0 +1,11 @@
+diff -ruN minetest-master/src/network/CMakeLists.txt minetest-freeminer/src/network/CMakeLists.txt
+--- minetest-master/src/network/CMakeLists.txt	2016-09-03 16:15:52.673779000 -0700
++++ minetest-freeminer/src/network/CMakeLists.txt	2016-09-03 15:43:59.810740000 -0700
+@@ -3,6 +3,7 @@
+ 	${CMAKE_CURRENT_SOURCE_DIR}/networkpacket.cpp
+ 	${CMAKE_CURRENT_SOURCE_DIR}/serverpackethandler.cpp
+ 	${CMAKE_CURRENT_SOURCE_DIR}/serveropcodes.cpp
++	${CMAKE_CURRENT_SOURCE_DIR}/fm_lan.cpp
+ 	PARENT_SCOPE
+ )
+ 

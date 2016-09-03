@@ -1,0 +1,16 @@
+diff -ruN minetest-master/build/android_fm/res/values/styles.xml minetest-freeminer/build/android_fm/res/values/styles.xml
+--- minetest-master/build/android_fm/res/values/styles.xml	1969-12-31 16:00:00.000000000 -0800
++++ minetest-freeminer/build/android_fm/res/values/styles.xml	2016-09-03 15:43:59.826740000 -0700
+@@ -0,0 +1,11 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++	<style name="Theme.Transparent" parent="android:Theme">
++		<item name="android:windowIsTranslucent">true</item>
++		<item name="android:windowBackground">@android:color/transparent</item>
++		<item name="android:windowContentOverlay">@null</item>
++		<item name="android:windowNoTitle">true</item>
++		<item name="android:windowIsFloating">true</item>
++		<item name="android:backgroundDimEnabled">false</item>
++	</style>
++</resources>
+\ No newline at end of file

@@ -1,0 +1,11 @@
+diff -ruN minetest-master/src/threading/CMakeLists.txt minetest-freeminer/src/threading/CMakeLists.txt
+--- minetest-master/src/threading/CMakeLists.txt	2016-09-03 16:15:52.701779000 -0700
++++ minetest-freeminer/src/threading/CMakeLists.txt	2016-09-03 15:44:00.010741000 -0700
+@@ -1,4 +1,7 @@
+ set(JTHREAD_SRCS
++	${CMAKE_CURRENT_SOURCE_DIR}/lock.cpp
++	${CMAKE_CURRENT_SOURCE_DIR}/thread_pool.cpp
++
+ 	${CMAKE_CURRENT_SOURCE_DIR}/event.cpp
+ 	${CMAKE_CURRENT_SOURCE_DIR}/mutex.cpp
+ 	${CMAKE_CURRENT_SOURCE_DIR}/thread.cpp

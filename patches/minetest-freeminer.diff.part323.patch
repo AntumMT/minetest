@@ -1,0 +1,14 @@
+diff -ruN minetest-master/src/lua/CMakeLists.txt minetest-freeminer/src/lua/CMakeLists.txt
+--- minetest-master/src/lua/CMakeLists.txt	2016-09-03 16:15:52.453778000 -0700
++++ minetest-freeminer/src/lua/CMakeLists.txt	2016-09-03 15:43:59.850740000 -0700
+@@ -59,6 +59,10 @@
+ 	set(COMMON_CFLAGS "${COMMON_CFLAGS} -DLUA_ANSI")
+ endif(LUA_ANSI)
+ 
++if(SANITIZE_THREAD)
++	set(COMMON_CFLAGS "${COMMON_CFLAGS} -fPIC")
++endif()
++
+ # COMMON_CFLAGS has no effect without this line
+ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_CFLAGS}")
+ 

@@ -1,0 +1,368 @@
+diff -ruN minetest-master/src/mapgen.cpp minetest-freeminer/src/mapgen.cpp
+--- minetest-master/src/mapgen.cpp	2016-09-03 16:15:52.565779000 -0700
++++ minetest-freeminer/src/mapgen.cpp	2016-09-03 15:43:59.722739000 -0700
+@@ -1,23 +1,27 @@
+ /*
+-Minetest
++mapgen.cpp
+ Copyright (C) 2010-2015 kwolekr, Ryan Kwolek <kwolekr@minetest.net>
+ Copyright (C) 2010-2015 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
++#include <fstream>
+ #include "mapgen.h"
+ #include "voxel.h"
+ #include "noise.h"
+@@ -38,7 +42,12 @@
+ #include "util/serialize.h"
+ #include "util/numeric.h"
+ #include "filesys.h"
+-#include "log.h"
++
++#include "log_types.h"
++#include "mapgen_indev.h"
++#include "mapgen_math.h"
++#include "environment.h"
++
+ #include "mapgen_flat.h"
+ #include "mapgen_fractal.h"
+ #include "mapgen_v5.h"
+@@ -49,6 +58,7 @@
+ #include "cavegen.h"
+ #include "dungeongen.h"
+ 
++
+ FlagDesc flagdesc_mapgen[] = {
+ 	{"caves",       MG_CAVES},
+ 	{"dungeons",    MG_DUNGEONS},
+@@ -78,6 +88,9 @@
+ ////
+ 
+ static MapgenDesc g_reg_mapgens[] = {
++	{"indev",      true},
++	{"math",       true},
++
+ 	{"v5",         true},
+ 	{"v6",         true},
+ 	{"v7",         true},
+@@ -103,6 +116,8 @@
+ 	water_level = 0;
+ 	flags       = 0;
+ 
++	liquid_pressure = 0;
++
+ 	vm        = NULL;
+ 	ndef      = NULL;
+ 	biomegen  = NULL;
+@@ -114,12 +129,15 @@
+ Mapgen::Mapgen(int mapgenid, MapgenParams *params, EmergeManager *emerge) :
+ 	gennotify(emerge->gen_notify_on, &emerge->gen_notify_on_deco_ids)
+ {
++	this->m_emerge = emerge;
+ 	generating  = false;
+ 	id          = mapgenid;
+ 	water_level = params->water_level;
+ 	flags       = params->flags;
+ 	csize       = v3s16(1, 1, 1) * (params->chunksize * MAP_BLOCKSIZE);
+ 
++	liquid_pressure = params->liquid_pressure;
++
+ 	/*
+ 		We are losing half our entropy by doing this, but it is necessary to
+ 		preserve reverse compatibility.  If the top half of our current 64 bit
+@@ -173,6 +191,12 @@
+ 	MapgenParams *params, EmergeManager *emerge)
+ {
+ 	switch (mgtype) {
++
++	case MAPGEN_INDEV:
++		return new MapgenIndev(mgid, (MapgenIndevParams *)params, emerge);
++	case MAPGEN_MATH:
++		return new MapgenMath(mgid, (MapgenMathParams *)params, emerge);
++
+ 	case MAPGEN_FLAT:
+ 		return new MapgenFlat(mgid, (MapgenFlatParams *)params, emerge);
+ 	case MAPGEN_FRACTAL:
+@@ -196,6 +220,12 @@
+ MapgenParams *Mapgen::createMapgenParams(MapgenType mgtype)
+ {
+ 	switch (mgtype) {
++
++	case MAPGEN_INDEV:
++		return new MapgenIndevParams;
++	case MAPGEN_MATH:
++		return new MapgenMathParams;
++
+ 	case MAPGEN_FLAT:
+ 		return new MapgenFlatParams;
+ 	case MAPGEN_FRACTAL:
+@@ -350,10 +380,12 @@
+ 	return false;
+ }
+ 
+-void Mapgen::updateLiquid(UniqueQueue<v3s16> *trans_liquid, v3s16 nmin, v3s16 nmax)
++void Mapgen::updateLiquid(v3POS nmin, v3POS nmax)
+ {
+ 	bool isignored, isliquid, wasignored, wasliquid, waschecked, waspushed;
+ 	v3s16 em  = vm->m_area.getExtent();
++	bool rare = g_settings->getBool("liquid_real");
++	int rarecnt = 0;
+ 
+ 	for (s16 z = nmin.Z + 1; z <= nmax.Z - 1; z++)
+ 	for (s16 x = nmin.X + 1; x <= nmax.X - 1; x++) {
+@@ -374,8 +406,9 @@
+ 			} else if (isliquid) {
+ 				// This is the topmost node in the column
+ 				bool ispushed = false;
+-				if (isLiquidHorizontallyFlowable(vi, em)) {
+-					trans_liquid->push_back(v3s16(x, y, z));
++				if ((!rare || !(rarecnt++ % 36)) && isLiquidHorizontallyFlowable(vi, em)) {
++					//trans_liquid->push_back(v3s16(x, y, z));
++					vm->m_map->transforming_liquid_add(v3POS(x, y, z));
+ 					ispushed = true;
+ 				}
+ 				// Remember waschecked and waspushed to avoid repeated
+@@ -386,11 +419,12 @@
+ 				// This is the topmost node below a liquid column
+ 				u32 vi_above = vi;
+ 				vm->m_area.add_y(em, vi_above, 1);
+-				if (!waspushed && (ndef->get(vm->m_data[vi]).floodable ||
++				if ((!rare || !(rarecnt++ % 36)) && !waspushed && (ndef->get(vm->m_data[vi]).floodable ||
+ 						(!waschecked && isLiquidHorizontallyFlowable(vi_above, em)))) {
+ 					// Push back the lowest node in the column which is one
+ 					// node above this one
+-					trans_liquid->push_back(v3s16(x, y + 1, z));
++					//trans_liquid->push_back(v3s16(x, y + 1, z));
++					vm->m_map->transforming_liquid_add(v3POS(x, y + 1, z));
+ 				}
+ 			}
+ 
+@@ -416,8 +450,8 @@
+ 	}
+ }
+ 
+-
+-void Mapgen::lightSpread(VoxelArea &a, v3s16 p, u8 light)
++void Mapgen::lightSpread(VoxelArea &a, v3s16 p, u8 light,
++		unordered_map_v3POS<u8> & skip, int r)
+ {
+ 	if (light <= 1 || !a.contains(p))
+ 		return;
+@@ -431,7 +465,7 @@
+ 		light_day -= 0x01;
+ 
+ 	u8 light_night = light & 0xF0;
+-	if (light_night > 0)
++	if (light_night > 0x10)
+ 		light_night -= 0x10;
+ 
+ 	// Bail out only if we have no more light from either bank to propogate, or
+@@ -449,14 +483,22 @@
+ 
+ 	n.param1 = light;
+ 
+-	lightSpread(a, p + v3s16(0, 0, 1), light);
+-	lightSpread(a, p + v3s16(0, 1, 0), light);
+-	lightSpread(a, p + v3s16(1, 0, 0), light);
+-	lightSpread(a, p - v3s16(0, 0, 1), light);
+-	lightSpread(a, p - v3s16(0, 1, 0), light);
+-	lightSpread(a, p - v3s16(1, 0, 0), light);
+-}
++	if (++r > 100) {
++		//errorstream<<"mapgen light recursion stop r="<<r << " p=" << p << " lwas=" << (int)n.param1 << " lnow="<< (int )light << " day="<<(int)light_day << " ni="<<(int)light_night<<" skip="<<skip.size() << "\n";
++		return;
++	}
++
++	if (skip.count(p))
++		return;
++	skip.emplace(p, 1);
+ 
++	lightSpread(a, p + v3s16(0, 0, 1), light, skip, r);
++	lightSpread(a, p + v3s16(0, 1, 0), light, skip, r);
++	lightSpread(a, p + v3s16(1, 0, 0), light, skip, r);
++	lightSpread(a, p - v3s16(0, 0, 1), light, skip, r);
++	lightSpread(a, p - v3s16(0, 1, 0), light, skip, r);
++	lightSpread(a, p - v3s16(1, 0, 0), light, skip, r);
++}
+ 
+ void Mapgen::calcLighting(v3s16 nmin, v3s16 nmax, v3s16 full_nmin, v3s16 full_nmax,
+ 	bool propagate_shadow)
+@@ -490,6 +532,22 @@
+ 					continue;
+ 			} else if ((vm->m_data[i].param1 & 0x0F) != LIGHT_SUN &&
+ 					propagate_shadow) {
++				u32 ii = 0;
++				if (
++				(x < a.MaxEdge.X && (ii = vm->m_area.index(x + 1, a.MaxEdge.Y + 1, z    )) &&
++				(vm->m_data[ii].getContent() != CONTENT_IGNORE) &&
++				((vm->m_data[ii].param1 & 0x0F) == LIGHT_SUN))||
++				(x > a.MinEdge.X && (ii = vm->m_area.index(x - 1, a.MaxEdge.Y + 1, z    )) &&
++				(vm->m_data[ii].getContent() != CONTENT_IGNORE) &&
++				((vm->m_data[ii].param1 & 0x0F) == LIGHT_SUN))||
++				(z > a.MinEdge.Z && (ii = vm->m_area.index(x    , a.MaxEdge.Y + 1, z - 1)) &&
++				(vm->m_data[ii].getContent() != CONTENT_IGNORE) &&
++				((vm->m_data[ii].param1 & 0x0F) == LIGHT_SUN))||
++				(z < a.MaxEdge.Z && (ii = vm->m_area.index(x    , a.MaxEdge.Y + 1, z + 1)) &&
++				(vm->m_data[ii].getContent() != CONTENT_IGNORE) &&
++				((vm->m_data[ii].param1 & 0x0F) == LIGHT_SUN))
++				) {
++				} else
+ 				continue;
+ 			}
+ 			vm->m_area.add_y(em, i, -1);
+@@ -533,12 +591,13 @@
+ 
+ 				u8 light = n.param1;
+ 				if (light) {
+-					lightSpread(a, v3s16(x,     y,     z + 1), light);
+-					lightSpread(a, v3s16(x,     y + 1, z    ), light);
+-					lightSpread(a, v3s16(x + 1, y,     z    ), light);
+-					lightSpread(a, v3s16(x,     y,     z - 1), light);
+-					lightSpread(a, v3s16(x,     y - 1, z    ), light);
+-					lightSpread(a, v3s16(x - 1, y,     z    ), light);
++					unordered_map_v3POS<u8> skip;
++					lightSpread(a, v3s16(x,     y,     z + 1), light, skip);
++					lightSpread(a, v3s16(x,     y + 1, z    ), light, skip);
++					lightSpread(a, v3s16(x + 1, y,     z    ), light, skip);
++					lightSpread(a, v3s16(x,     y,     z - 1), light, skip);
++					lightSpread(a, v3s16(x,     y - 1, z    ), light, skip);
++					lightSpread(a, v3s16(x - 1, y,     z    ), light, skip);
+ 				}
+ 			}
+ 		}
+@@ -616,6 +675,11 @@
+ 		c_sandstonebrick = c_sandstone;
+ 	if (c_stair_sandstonebrick == CONTENT_IGNORE)
+ 		c_stair_sandstonebrick = c_sandstone;
++
++	//freeminer:
++	c_ice                = ndef->getId("mapgen_ice");
++	//=========
++
+ }
+ 
+ 
+@@ -660,9 +724,13 @@
+ 		// nplaced to stone level by setting a number exceeding any possible filler depth.
+ 		u16 nplaced = (air_above || water_above) ? 0 : U16_MAX;
+ 
++		s16 heat = m_emerge->env->m_use_weather ? m_emerge->env->getServerMap().updateBlockHeat(m_emerge->env, v3POS(x,node_max.Y,z), NULL, &heat_cache) : 0;
++
+ 		for (s16 y = node_max.Y; y >= node_min.Y; y--) {
+ 			content_t c = vm->m_data[vi].getContent();
+ 
++			bool cc_stone = (c != CONTENT_AIR && c != c_water_source && c != CONTENT_IGNORE);
++
+ 			// Biome is recalculated each time an upper surface is detected while
+ 			// working down a column. The selected biome then remains in effect for
+ 			// all nodes below until the next surface and biome recalculation.
+@@ -670,7 +738,7 @@
+ 			// 1. At the surface of stone below air or water.
+ 			// 2. At the surface of water below air.
+ 			// 3. When stone or water is detected but biome has not yet been calculated.
+-			bool is_stone_surface = (c == c_stone) &&
++			bool is_stone_surface = (cc_stone) &&
+ 				(air_above || water_above || !biome);
+ 
+ 			bool is_water_surface =
+@@ -699,7 +767,10 @@
+ 					stone_type = MGSTONE_SANDSTONE;
+ 			}
+ 
+-			if (c == c_stone) {
++			if (cc_stone && biome && (c == biome->c_ice || c == biome->c_water || c == biome->c_water_top))
++				cc_stone = false;
++
++			if (cc_stone) {
+ 				content_t c_below = vm->m_data[vi - em.X].getContent();
+ 
+ 				// If the node below isn't solid, make this node stone, so that
+@@ -720,20 +791,30 @@
+ 						river_water_above = false;
+ 					}
+ 				} else if (nplaced < depth_top) {
+-					vm->m_data[vi] = MapNode(biome->c_top);
++					vm->m_data[vi] = MapNode(
++								((y < water_level) /* && (biome->c_top == c_dirt_with_grass)*/ )
++									? biome->c_top
++									: heat < -3
++										? biome->c_top_cold
++										: biome->c_top);
+ 					nplaced++;
+ 				} else if (nplaced < base_filler) {
+ 					vm->m_data[vi] = MapNode(biome->c_filler);
+ 					nplaced++;
+-				} else {
++				} else if (nplaced < (depth_top+base_filler+depth_water_top)) {
+ 					vm->m_data[vi] = MapNode(biome->c_stone);
+ 				}
+ 
+ 				air_above = false;
+ 				water_above = false;
+ 			} else if (c == c_water_source) {
++
++				bool ice = heat < 0 && y > water_level + heat/4;
++
+ 				vm->m_data[vi] = MapNode((y > (s32)(water_level - depth_water_top))
+-						? biome->c_water_top : biome->c_water);
++
++						? (ice ? biome->c_ice : biome->c_water_top) : ice ? biome->c_ice : biome->c_water);
++
+ 				nplaced = 0;  // Enable top/filler placement for next surface
+ 				air_above = false;
+ 				water_above = true;
+@@ -971,7 +1052,7 @@
+ }
+ 
+ 
+-void MapgenParams::readParams(const Settings *settings)
++void MapgenParams::readParams(Settings *settings)
+ {
+ 	std::string seed_str;
+ 	const char *seed_name = (settings == g_settings) ? "fixed_map_seed" : "seed";
+@@ -991,8 +1072,10 @@
+ 	settings->getS16NoEx("chunksize", chunksize);
+ 	settings->getFlagStrNoEx("mg_flags", flags, flagdesc_mapgen);
+ 
++	settings->getS16NoEx("liquid_pressure", liquid_pressure);
++
+ 	delete bparams;
+-	bparams = BiomeManager::createBiomeParams(BIOMEGEN_ORIGINAL);
++	bparams = (BiomeParamsOriginal*)BiomeManager::createBiomeParams(BIOMEGEN_ORIGINAL);
+ 	if (bparams) {
+ 		bparams->readParams(settings);
+ 		bparams->seed = seed;
+@@ -1008,6 +1091,8 @@
+ 	settings->setS16("chunksize", chunksize);
+ 	settings->setFlagStr("mg_flags", flags, flagdesc_mapgen, U32_MAX);
+ 
++	settings->setS16("liquid_pressure", liquid_pressure);
++
+ 	if (bparams)
+ 		bparams->writeParams(settings);
+ }

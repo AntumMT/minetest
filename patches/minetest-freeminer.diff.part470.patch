@@ -1,0 +1,212 @@
+diff -ruN minetest-master/src/script/lua_api/l_mainmenu.cpp minetest-freeminer/src/script/lua_api/l_mainmenu.cpp
+--- minetest-master/src/script/lua_api/l_mainmenu.cpp	2016-09-03 16:15:52.633779000 -0700
++++ minetest-freeminer/src/script/lua_api/l_mainmenu.cpp	2016-09-03 15:43:59.962741000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++script/lua_api/l_mainmenu.cpp
+ Copyright (C) 2013 sapier
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "lua_api/l_mainmenu.h"
+@@ -452,6 +455,8 @@
+ 	return 1;
+ }
+ 
++	std::vector<ServerListSpec> servers_cache;
++
+ /******************************************************************************/
+ int ModApiMainMenu::l_get_favorites(lua_State *L)
+ {
+@@ -464,124 +469,42 @@
+ 	std::vector<ServerListSpec> servers;
+ 
+ 	if(listtype == "online") {
++		ServerList::lan_get();
++		servers_cache =
+ 		servers = ServerList::getOnline();
++		ServerList::lan_apply(servers);
++	} else if (listtype == "sleep_cache") {
++		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
++		if (ServerList::lan_fresh()) {
++			servers = servers_cache;
++			ServerList::lan_apply(servers);
++		}
+ 	} else {
+ 		servers = ServerList::getLocal();
+ 	}
+ 
+-	lua_newtable(L);
+-	int top = lua_gettop(L);
+-	unsigned int index = 1;
+-
++	Json::Value root(Json::arrayValue);
+ 	for (unsigned int i = 0; i < servers.size(); i++)
+ 	{
++		root[i] = servers[i];
++	}
++	lua_pushnil(L);
++	int nullindex = lua_gettop(L);
++	if(!push_json_value(L, root, nullindex)) {
++	}
+ 
+-		lua_pushnumber(L,index);
+-
+-		lua_newtable(L);
+-		int top_lvl2 = lua_gettop(L);
+-
+-		if (servers[i]["clients"].asString().size()) {
+-			std::string clients_raw = servers[i]["clients"].asString();
+-			char* endptr = 0;
+-			int numbervalue = strtol(clients_raw.c_str(),&endptr,10);
+-
+-			if ((clients_raw != "") && (*endptr == 0)) {
+-				lua_pushstring(L,"clients");
+-				lua_pushnumber(L,numbervalue);
+-				lua_settable(L, top_lvl2);
+-			}
+-		}
+-
+-		if (servers[i]["clients_max"].asString().size()) {
+-
+-			std::string clients_max_raw = servers[i]["clients_max"].asString();
+-			char* endptr = 0;
+-			int numbervalue = strtol(clients_max_raw.c_str(),&endptr,10);
+-
+-			if ((clients_max_raw != "") && (*endptr == 0)) {
+-				lua_pushstring(L,"clients_max");
+-				lua_pushnumber(L,numbervalue);
+-				lua_settable(L, top_lvl2);
+-			}
+-		}
+-
+-		if (servers[i]["version"].asString().size()) {
+-			lua_pushstring(L,"version");
+-			std::string topush = servers[i]["version"].asString();
+-			lua_pushstring(L,topush.c_str());
+-			lua_settable(L, top_lvl2);
+-		}
+-
+-		if (servers[i]["proto_min"].asString().size()) {
+-			lua_pushstring(L,"proto_min");
+-			lua_pushinteger(L,servers[i]["proto_min"].asInt());
+-			lua_settable(L, top_lvl2);
+-		}
+-
+-		if (servers[i]["proto_max"].asString().size()) {
+-			lua_pushstring(L,"proto_max");
+-			lua_pushinteger(L,servers[i]["proto_max"].asInt());
+-			lua_settable(L, top_lvl2);
+-		}
+-
+-		if (servers[i]["password"].asString().size()) {
+-			lua_pushstring(L,"password");
+-			lua_pushboolean(L,servers[i]["password"].asBool());
+-			lua_settable(L, top_lvl2);
+-		}
+-
+-		if (servers[i]["creative"].asString().size()) {
+-			lua_pushstring(L,"creative");
+-			lua_pushboolean(L,servers[i]["creative"].asBool());
+-			lua_settable(L, top_lvl2);
+-		}
+-
+-		if (servers[i]["damage"].asString().size()) {
+-			lua_pushstring(L,"damage");
+-			lua_pushboolean(L,servers[i]["damage"].asBool());
+-			lua_settable(L, top_lvl2);
+-		}
+-
+-		if (servers[i]["pvp"].asString().size()) {
+-			lua_pushstring(L,"pvp");
+-			lua_pushboolean(L,servers[i]["pvp"].asBool());
+-			lua_settable(L, top_lvl2);
+-		}
+-
+-		if (servers[i]["description"].asString().size()) {
+-			lua_pushstring(L,"description");
+-			std::string topush = servers[i]["description"].asString();
+-			lua_pushstring(L,topush.c_str());
+-			lua_settable(L, top_lvl2);
+-		}
+-
+-		if (servers[i]["name"].asString().size()) {
+-			lua_pushstring(L,"name");
+-			std::string topush = servers[i]["name"].asString();
+-			lua_pushstring(L,topush.c_str());
+-			lua_settable(L, top_lvl2);
+-		}
+-
+-		if (servers[i]["address"].asString().size()) {
+-			lua_pushstring(L,"address");
+-			std::string topush = servers[i]["address"].asString();
+-			lua_pushstring(L,topush.c_str());
+-			lua_settable(L, top_lvl2);
+-		}
++	return 1;
++}
+ 
+-		if (servers[i]["port"].asString().size()) {
+-			lua_pushstring(L,"port");
+-			std::string topush = servers[i]["port"].asString();
+-			lua_pushstring(L,topush.c_str());
+-			lua_settable(L, top_lvl2);
+-		}
++/*
++int ModApiMainMenu::l_favorites_refresh(lua_State *L)
++{
++	ServerList::getLocal();
++	lua_pushboolean(L, ServerList::want_reftesh());
+ 
+-		lua_settable(L, top);
+-		index++;
+-	}
+ 	return 1;
+ }
++*/
+ 
+ /******************************************************************************/
+ int ModApiMainMenu::l_delete_favorite(lua_State *L)
+@@ -732,7 +655,7 @@
+ int ModApiMainMenu::l_get_gamepath(lua_State *L)
+ {
+ 	std::string gamepath = fs::RemoveRelativePathComponents(
+-		porting::path_user + DIR_DELIM + "games" + DIR_DELIM);
++		porting::path_user + DIR_DELIM + "games" + GAMES_VERSION + DIR_DELIM);
+ 	lua_pushstring(L, gamepath.c_str());
+ 	return 1;
+ }
+@@ -919,7 +842,7 @@
+ 		return true;
+ 
+ 	/* games */
+-	if (fs::PathStartsWith(path,fs::RemoveRelativePathComponents(porting::path_share + DIR_DELIM + "games")))
++	if (fs::PathStartsWith(path,fs::RemoveRelativePathComponents(porting::path_share + DIR_DELIM + "games" + GAMES_VERSION)))
+ 		return true;
+ 
+ 	/* mods */

@@ -1,0 +1,17 @@
+diff -ruN minetest-master/misc/Info.plist minetest-freeminer/misc/Info.plist
+--- minetest-master/misc/Info.plist	2016-09-03 16:15:52.521778000 -0700
++++ minetest-freeminer/misc/Info.plist	2016-09-03 15:43:59.886740000 -0700
+@@ -5,10 +5,10 @@
+ 	<key>CFBundleDevelopmentRegion</key>
+ 	<string>English</string>
+ 	<key>CFBundleExecutable</key>
+-	<string>minetest</string>
++	<string>freeminer</string>
+ 	<key>CFBundleIconFile</key>
+-	<string>minetest-icon.icns</string>
++	<string>freeminer-icon.icns</string>
+ 	<key>CFBundleIdentifier</key>
+-	<string>net.minetest.minetest</string>
++	<string>org.freeminer.freeminer</string>
+ </dict>
+ </plist>

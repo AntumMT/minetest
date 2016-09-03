@@ -1,0 +1,31 @@
+diff -ruN minetest-master/src/network/networkpacket.h minetest-freeminer/src/network/networkpacket.h
+--- minetest-master/src/network/networkpacket.h	2016-09-03 16:15:52.581779000 -0700
++++ minetest-freeminer/src/network/networkpacket.h	2016-09-03 15:43:59.922741000 -0700
+@@ -24,6 +24,8 @@
+ #include "util/numeric.h"
+ #include "networkprotocol.h"
+ 
++class MsgpackPacketSafe;
++
+ class NetworkPacket
+ {
+ 
+@@ -126,6 +128,18 @@
+ 		u32 m_read_offset;
+ 		u16 m_command;
+ 		u16 m_peer_id;
++
++//freeminer:
++public:
++		MsgpackPacketSafe * packet = nullptr;
++		msgpack::unpacked * packet_unpacked = nullptr;
++		int packet_unpack();
++private:
++
++
+ };
+ 
++#include "../util/msgpack_serialize.h"
++bool parse_msgpack_packet(char *data, u32 datasize, MsgpackPacket *packet, int *command, msgpack::unpacked &msg);
++
+ #endif

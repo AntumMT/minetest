@@ -1,0 +1,167 @@
+diff -ruN minetest-master/src/hud.cpp minetest-freeminer/src/hud.cpp
+--- minetest-master/src/hud.cpp	2016-09-03 16:15:52.425778000 -0700
++++ minetest-freeminer/src/hud.cpp	2016-09-03 15:43:59.834740000 -0700
+@@ -1,34 +1,38 @@
+-/*
+-Minetest
++﻿/*
++hud.cpp
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
+ Copyright (C) 2010-2013 blue42u, Jonathon Anderson <anderjon@umail.iu.edu>
+ Copyright (C) 2010-2013 kwolekr, Ryan Kwolek <kwolekr@minetest.net>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "hud.h"
+ #include "settings.h"
+ #include "util/numeric.h"
+ #include "util/string.h"
+-#include "log.h"
++#include "log_types.h"
+ #include "gamedef.h"
+ #include "itemdef.h"
+ #include "inventory.h"
+ #include "client/tile.h"
+ #include "localplayer.h"
++#include "game.h" // CameraModes
+ #include "camera.h"
+ #include "porting.h"
+ #include "fontengine.h"
+@@ -79,6 +83,7 @@
+ 	use_crosshair_image = tsrc->isKnownSourceImage("crosshair.png");
+ 
+ 	hotbar_image = "";
++	hotbar_image_items = 0;
+ 	use_hotbar_image = false;
+ 	hotbar_selected_image = "";
+ 	use_hotbar_selected_image = false;
+@@ -205,6 +210,7 @@
+ 		g_touchscreengui->resetHud();
+ #endif
+ 
++	//only for !hotbar_image_items ===
+ 	s32 height  = m_hotbar_imagesize + m_padding * 2;
+ 	s32 width   = (itemcount - inv_offset) * (m_hotbar_imagesize + m_padding * 2);
+ 
+@@ -213,6 +219,7 @@
+ 		height = width;
+ 		width = tmp;
+ 	}
++	//================================
+ 
+ 	// Position of upper left corner of bar
+ 	v2s32 pos = screen_offset;
+@@ -220,9 +227,11 @@
+ 	pos.Y *= m_hud_scaling * porting::getDisplayDensity();
+ 	pos += upperleftpos;
+ 
++
+ 	// Store hotbar_image in member variable, used by drawItem()
+ 	if (hotbar_image != player->hotbar_image) {
+ 		hotbar_image = player->hotbar_image;
++		hotbar_image_items = player->hotbar_image_items;
+ 		if (hotbar_image != "")
+ 			use_hotbar_image = tsrc->isKnownSourceImage(hotbar_image);
+ 		else
+@@ -240,6 +249,7 @@
+ 
+ 	// draw customized item background
+ 	if (use_hotbar_image) {
++	  if (!hotbar_image_items) {
+ 		core::rect<s32> imgrect2(-m_padding/2, -m_padding/2,
+ 			width+m_padding/2, height+m_padding/2);
+ 		core::rect<s32> rect2 = imgrect2 + pos;
+@@ -248,10 +258,33 @@
+ 		draw2DImageFilterScaled(driver, texture, rect2,
+ 			core::rect<s32>(core::position2d<s32>(0,0), imgsize),
+ 			NULL, hbar_colors, true);
++
++	  } else {
++		video::ITexture *texture = tsrc->getTexture(hotbar_image);
++		core::dimension2di imgsize(texture->getOriginalSize());
++		// todo: maybe deal with hotbar_image_items>1
++		core::rect<s32> rect(-m_padding, -m_padding,
++			m_hotbar_imagesize + m_padding, m_hotbar_imagesize + m_padding);
++		rect += pos;
++		core::position2d<s32> step(0, 0);
++		(direction == HUD_DIR_TOP_BOTTOM || direction == HUD_DIR_BOTTOM_TOP ?
++			step.Y : step.X) = m_hotbar_imagesize + m_padding * 2;
++		for (int i = 0; i < itemcount - inv_offset; i++) {
++			draw2DImageFilterScaled(driver,texture, rect,
++				core::rect<s32>(core::position2d<s32>(0, 0), imgsize),
++				NULL, hbar_colors, true);
++			rect += step;
++		}
++	  }
++
+ 	}
+ 
+ 	// Draw items
+-	core::rect<s32> imgrect(0, 0, m_hotbar_imagesize, m_hotbar_imagesize);
++	core::rect<s32> imgrect;
++	if (!hotbar_image_items)
++		imgrect = core::rect<s32>(0, 0, m_hotbar_imagesize, m_hotbar_imagesize);
++	else
++		imgrect = core::rect<s32>(-m_padding, -m_padding, m_hotbar_imagesize - m_padding, m_hotbar_imagesize - m_padding);
+ 	for (s32 i = inv_offset; i < itemcount && (size_t)i < mainlist->getSize(); i++) {
+ 		s32 fullimglen = m_hotbar_imagesize + m_padding * 2;
+ 
+@@ -461,7 +494,7 @@
+ 		pos.X += width/4;
+ 
+ 		v2s32 secondpos = pos;
+-		pos = pos - v2s32(0, m_hotbar_imagesize + m_padding);
++		pos = pos - v2s32(0, m_hotbar_imagesize + m_padding * (hotbar_image_items ? 2 : 1));
+ 
+ 		if (player->hud_flags & HUD_FLAG_HOTBAR_VISIBLE) {
+ 			drawItems(pos, v2s32(0, 0), hotbar_itemcount / 2, 0,
+@@ -470,25 +503,6 @@
+ 				hotbar_itemcount / 2, mainlist, playeritem + 1, 0);
+ 		}
+ 	}
+-
+-	//////////////////////////// compatibility code to be removed //////////////
+-	// this is ugly as hell but there's no other way to keep compatibility to
+-	// old servers
+-	if ((player->hud_flags & HUD_FLAG_HEALTHBAR_VISIBLE)) {
+-		drawStatbar(v2s32(floor(0.5 * (float)m_screensize.X + 0.5),
+-			floor(1 * (float) m_screensize.Y + 0.5)),
+-			HUD_CORNER_UPPER, 0, "heart.png",
+-			player->hp, v2s32((-10*24)-25,-(48+24+10)), v2s32(24,24));
+-	}
+-
+-	if ((player->hud_flags & HUD_FLAG_BREATHBAR_VISIBLE) &&
+-			(player->getBreath() < 11)) {
+-		drawStatbar(v2s32(floor(0.5 * (float)m_screensize.X + 0.5),
+-			floor(1 * (float) m_screensize.Y + 0.5)),
+-			HUD_CORNER_UPPER, 0, "bubble.png",
+-			player->getBreath(), v2s32(25,-(48+24+10)), v2s32(24,24));
+-	}
+-	////////////////////////////////////////////////////////////////////////////
+ }
+ 
+ 

@@ -1,0 +1,131 @@
+diff -ruN minetest-master/src/content_sao.h minetest-freeminer/src/content_sao.h
+--- minetest-master/src/content_sao.h	2016-09-03 16:15:52.625779000 -0700
++++ minetest-freeminer/src/content_sao.h	2016-09-03 15:43:59.950741000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++content_sao.h
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #ifndef CONTENT_SAO_HEADER
+@@ -83,22 +86,25 @@
+ 	std::string getName();
+ 	bool getCollisionBox(aabb3f *toset);
+ 	bool collideWithObjects();
+-private:
++protected:
+ 	std::string getPropertyPacket();
+ 	void sendPosition(bool do_interpolate, bool is_movement_end);
+ 
+ 	std::string m_init_name;
+ 	std::string m_init_state;
+ 	bool m_registered;
++
++public:
+ 	struct ObjectProperties m_prop;
+ 
+-	s16 m_hp;
++	std::atomic_ushort m_hp;
+ 	v3f m_velocity;
+ 	v3f m_acceleration;
+ 	float m_yaw;
++private:
+ 	ItemGroupList m_armor_groups;
+ 
+-	bool m_properties_sent;
++	std::atomic_bool m_properties_sent;
+ 	float m_last_sent_yaw;
+ 	v3f m_last_sent_position;
+ 	v3f m_last_sent_velocity;
+@@ -185,7 +191,7 @@
+ 	void moveTo(v3f pos, bool continuous);
+ 	void setYaw(float);
+ 	void setPitch(float);
+-
++	void addSpeed(v3f);
+ 	/*
+ 		Interaction interface
+ 	*/
+@@ -248,12 +254,14 @@
+ 	}
+ 	float resetTimeFromLastPunch()
+ 	{
++		auto lock = lock_unique_rec();
+ 		float r = m_time_from_last_punch;
+ 		m_time_from_last_punch = 0.0;
+ 		return r;
+ 	}
+ 	void noCheatDigStart(v3s16 p)
+ 	{
++		auto lock = lock_unique_rec();
+ 		m_nocheat_dig_pos = p;
+ 		m_nocheat_dig_time = 0;
+ 	}
+@@ -299,17 +307,20 @@
+ 	// Cheat prevention
+ 	LagPool m_dig_pool;
+ 	LagPool m_move_pool;
++public:
+ 	v3f m_last_good_position;
++	std::atomic_uint m_ms_from_last_respawn;
++private:
+ 	float m_time_from_last_punch;
+ 	v3s16 m_nocheat_dig_pos;
+ 	float m_nocheat_dig_time;
+ 
+ 	int m_wield_index;
+-	bool m_position_not_sent;
++	std::atomic_bool m_position_not_sent;
+ 	ItemGroupList m_armor_groups;
+-	bool m_armor_groups_sent;
++	std::atomic_bool m_armor_groups_sent;
+ 
+-	bool m_properties_sent;
++	std::atomic_bool m_properties_sent;
+ 	struct ObjectProperties m_prop;
+ 	// Cached privileges for enforcement
+ 	std::set<std::string> m_privs;
+@@ -319,7 +330,7 @@
+ 	float m_animation_speed;
+ 	float m_animation_blend;
+ 	bool m_animation_loop;
+-	bool m_animation_sent;
++	std::atomic_bool m_animation_sent;
+ 
+ 	std::map<std::string, core::vector2d<v3f> > m_bone_position; // Stores position and rotation for each bone name
+ 	bool m_bone_position_sent;
+@@ -338,7 +349,7 @@
+ 	float m_physics_override_gravity;
+ 	bool m_physics_override_sneak;
+ 	bool m_physics_override_sneak_glitch;
+-	bool m_physics_override_sent;
++	std::atomic_bool m_physics_override_sent;
+ };
+ 
+ #endif

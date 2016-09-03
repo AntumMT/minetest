@@ -1,0 +1,24 @@
+diff -ruN minetest-master/misc/minetest.desktop minetest-freeminer/misc/minetest.desktop
+--- minetest-master/misc/minetest.desktop	2016-09-03 16:15:52.577779000 -0700
++++ minetest-freeminer/misc/minetest.desktop	1969-12-31 16:00:00.000000000 -0800
+@@ -1,17 +0,0 @@
+-[Desktop Entry]
+-Name=Minetest
+-GenericName=Minetest
+-Comment=Multiplayer infinite-world block sandbox
+-Comment[de]=Mehrspieler-Sandkastenspiel mit unendlichen Blockwelten
+-Comment[es]=Juego sandbox multijugador con mundos infinitos
+-Comment[fr]=Jeu multijoueurs de type bac à sable avec des mondes infinis
+-Comment[ja]=マルチプレイに対応した、無限の世界のブロック型サンドボックスゲームです
+-Comment[ru]=Игра-песочница с безграничным миром, состоящим из блоков
+-Comment[tr]=Tek-Çok oyuncuyla küplerden sonsuz dünyalar inşa et
+-Exec=minetest
+-Icon=minetest
+-Terminal=false
+-Type=Application
+-Categories=Game;Simulation;
+-StartupNotify=false
+-Keywords=sandbox;world;mining;crafting;blocks;nodes;multiplayer;roleplaying;
+Binary files minetest-master/misc/minetest-icon-24x24.png and minetest-freeminer/misc/minetest-icon-24x24.png differ
+Binary files minetest-master/misc/minetest-icon.icns and minetest-freeminer/misc/minetest-icon.icns differ
+Binary files minetest-master/misc/minetest-icon.ico and minetest-freeminer/misc/minetest-icon.ico differ

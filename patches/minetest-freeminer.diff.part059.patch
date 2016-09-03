@@ -1,0 +1,39 @@
+diff -ruN minetest-master/build/gentoo/files/freeminerserver.initd minetest-freeminer/build/gentoo/files/freeminerserver.initd
+--- minetest-master/build/gentoo/files/freeminerserver.initd	1969-12-31 16:00:00.000000000 -0800
++++ minetest-freeminer/build/gentoo/files/freeminerserver.initd	2016-09-03 15:43:59.658739000 -0700
+@@ -0,0 +1,35 @@
++#!/sbin/runscript
++# Distributed under the terms of the GNU General Public License v2
++# $Id$
++
++description="Freeminer server"
++
++depend() {
++	need net
++}
++
++start() {
++	ebegin "starting server"
++	start-stop-daemon \
++		--start \
++		--quiet \
++		--make-pidfile \
++		--pidfile "${PIDFILE}" \
++		--background \
++		--user ${USER} \
++		--group ${GROUP} \
++		--exec "${FREEMINERBIN}" -- ${ARGS}
++
++	eend $?
++}
++
++stop() {
++	ebegin "stopping server"
++	start-stop-daemon \
++		--stop \
++		--signal 15 \
++		--quiet \
++		--pidfile "${PIDFILE}"
++
++	eend $?
++}

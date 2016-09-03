@@ -1,0 +1,52 @@
+diff -ruN minetest-master/src/util/directiontables.cpp minetest-freeminer/src/util/directiontables.cpp
+--- minetest-master/src/util/directiontables.cpp	2016-09-03 16:15:52.493778000 -0700
++++ minetest-freeminer/src/util/directiontables.cpp	2016-09-03 15:43:59.866740000 -0700
+@@ -1,25 +1,28 @@
+ /*
+-Minetest
++util/directiontables.cpp
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "directiontables.h"
+ 
+-const v3s16 g_6dirs[6] =
++const v3POS g_6dirs[7] =
+ {
+ 	// +right, +top, +back
+ 	v3s16( 0, 0, 1), // back
+@@ -27,7 +30,8 @@
+ 	v3s16( 1, 0, 0), // right
+ 	v3s16( 0, 0,-1), // front
+ 	v3s16( 0,-1, 0), // bottom
+-	v3s16(-1, 0, 0) // left
++	v3s16(-1, 0, 0), // left
++	v3s16( 0, 0, 0)  // self
+ };
+ 
+ const v3s16 g_26dirs[26] =

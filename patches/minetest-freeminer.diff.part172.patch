@@ -1,0 +1,375 @@
+diff -ruN minetest-master/src/client/tile.cpp minetest-freeminer/src/client/tile.cpp
+--- minetest-master/src/client/tile.cpp	2016-09-03 16:15:52.521778000 -0700
++++ minetest-freeminer/src/client/tile.cpp	2016-09-03 15:43:59.886740000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++tile.cpp
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "tile.h"
+@@ -167,25 +170,6 @@
+ }
+ 
+ /*
+-	Stores internal information about a texture.
+-*/
+-
+-struct TextureInfo
+-{
+-	std::string name;
+-	video::ITexture *texture;
+-
+-	TextureInfo(
+-			const std::string &name_,
+-			video::ITexture *texture_=NULL
+-		):
+-		name(name_),
+-		texture(texture_)
+-	{
+-	}
+-};
+-
+-/*
+ 	SourceImageCache: A cache used for storing source images.
+ */
+ 
+@@ -202,7 +186,8 @@
+ 	void insert(const std::string &name, video::IImage *img,
+ 			bool prefer_local, video::IVideoDriver *driver)
+ 	{
+-		assert(img); // Pre-condition
++		if(!img)
++			return;
+ 		// Remove old image
+ 		std::map<std::string, video::IImage*>::iterator n;
+ 		n = m_images.find(name);
+@@ -334,6 +319,7 @@
+ 
+ 	video::ITexture* getTexture(const std::string &name, u32 *id = NULL);
+ 
++	TextureInfo* getTextureInfo(u32 id);
+ 	/*
+ 		Get a texture specifically intended for mesh
+ 		application, i.e. not HUD, compositing, or other 2D
+@@ -437,7 +423,8 @@
+ TextureSource::TextureSource(IrrlichtDevice *device):
+ 		m_device(device)
+ {
+-	assert(m_device); // Pre-condition
++	if (!m_device)
++		return;
+ 
+ 	m_main_thread = thr_get_current_thread_id();
+ 
+@@ -533,7 +520,7 @@
+ 		}
+ 		catch(ItemNotFoundException &e)
+ 		{
+-			errorstream<<"Waiting for texture " << name << " timed out."<<std::endl;
++			infostream<<"Waiting for texture " << name << " timed out."<<std::endl;
+ 			return 0;
+ 		}
+ 	}
+@@ -613,7 +600,8 @@
+ 	}
+ 
+ 	video::IVideoDriver *driver = m_device->getVideoDriver();
+-	sanity_check(driver);
++	if (!driver)
++		return 0;
+ 
+ 	video::IImage *img = generateImage(name);
+ 
+@@ -626,7 +614,7 @@
+ 		// Create texture from resulting image
+ 		tex = driver->addTexture(name.c_str(), img);
+ 		guiScalingCache(io::path(name.c_str()), driver, img);
+-		img->drop();
++		//img->drop();
+ 	}
+ 
+ 	/*
+@@ -636,7 +624,9 @@
+ 	MutexAutoLock lock(m_textureinfo_cache_mutex);
+ 
+ 	u32 id = m_textureinfo_cache.size();
+-	TextureInfo ti(name, tex);
++	TextureInfo ti(name, tex, img);
++	if (img)
++		img->drop();
+ 	m_textureinfo_cache.push_back(ti);
+ 	m_name_to_id[name] = id;
+ 
+@@ -677,6 +667,16 @@
+ 	return getTexture(actual_id);
+ }
+ 
++TextureInfo * TextureSource::getTextureInfo(u32 id)
++{
++	MutexAutoLock lock(m_textureinfo_cache_mutex);
++
++	if(id >= m_textureinfo_cache.size())
++		return NULL;
++
++	return &m_textureinfo_cache[id];
++}
++
+ video::ITexture* TextureSource::getTextureForMesh(const std::string &name, u32 *id)
+ {
+ 	return getTexture(name + "^[applyfiltersformesh", id);
+@@ -706,7 +706,8 @@
+ {
+ 	//infostream<<"TextureSource::insertSourceImage(): name="<<name<<std::endl;
+ 
+-	sanity_check(thr_is_current_thread(m_main_thread));
++	if (!thr_is_current_thread(m_main_thread))
++		return;
+ 
+ 	m_sourcecache.insert(name, img, true, m_device->getVideoDriver());
+ 	m_source_image_existence.set(name, true);
+@@ -717,7 +718,8 @@
+ 	MutexAutoLock lock(m_textureinfo_cache_mutex);
+ 
+ 	video::IVideoDriver* driver = m_device->getVideoDriver();
+-	sanity_check(driver);
++	if (!driver)
++		return;
+ 
+ 	// Recreate textures
+ 	for (u32 i=0; i<m_textureinfo_cache.size(); i++){
+@@ -725,8 +727,10 @@
+ 		video::IImage *img = generateImage(ti->name);
+ #ifdef __ANDROID__
+ 		img = Align2Npot2(img, driver);
++/* wtf
+ 		sanity_check(img->getDimension().Height == npot2(img->getDimension().Height));
+ 		sanity_check(img->getDimension().Width == npot2(img->getDimension().Width));
++*/
+ #endif
+ 		// Create texture from resulting image
+ 		video::ITexture *t = NULL;
+@@ -748,10 +752,15 @@
+ 		const TextureFromMeshParams &params)
+ {
+ 	video::IVideoDriver *driver = m_device->getVideoDriver();
+-	sanity_check(driver);
++	if (!driver)
++		return nullptr;
+ 
+ #ifdef __ANDROID__
++	porting::irr_device_wait_egl(m_device);
++
+ 	const GLubyte* renderstr = glGetString(GL_RENDERER);
++	if (!renderstr)
++		return nullptr;
+ 	std::string renderer((char*) renderstr);
+ 
+ 	// use no render to texture hack
+@@ -764,9 +773,11 @@
+ 		) {
+ 		// Get a scene manager
+ 		scene::ISceneManager *smgr_main = m_device->getSceneManager();
+-		sanity_check(smgr_main);
++		if (!smgr_main)
++			return nullptr;
+ 		scene::ISceneManager *smgr = smgr_main->createNewSceneManager();
+-		sanity_check(smgr);
++		if(!smgr)
++			return nullptr;
+ 
+ 		const float scaling = 0.2;
+ 
+@@ -821,7 +832,9 @@
+ 				partsize.Width, partsize.Height, GL_RGBA,
+ 				GL_UNSIGNED_BYTE, pixels);
+ 
++#ifndef __ANDROID__
+ 		driver->endScene();
++#endif
+ 
+ 		// Drop scene manager
+ 		smgr->drop();
+@@ -905,9 +918,11 @@
+ 
+ 	// Get a scene manager
+ 	scene::ISceneManager *smgr_main = m_device->getSceneManager();
+-	assert(smgr_main);
++	if (!smgr_main)
++		return nullptr;
+ 	scene::ISceneManager *smgr = smgr_main->createNewSceneManager();
+-	assert(smgr);
++	if(!smgr)
++		return nullptr;
+ 
+ 	scene::IMeshSceneNode* meshnode =
+ 			smgr->addMeshSceneNode(params.mesh, NULL,
+@@ -929,16 +944,25 @@
+ 			params.light_color,
+ 			params.light_radius);
+ 
++	// Wield light shouldn't be used here
++	bool disable_wieldlight = g_settings->getBool("disable_wieldlight");
++	g_settings->setBool("disable_wieldlight", true);
++
+ 	// Render scene
+ 	driver->beginScene(true, true, video::SColor(0,0,0,0));
+ 	smgr->drawAll();
++
++#ifndef __ANDROID__
+ 	driver->endScene();
++#endif
++	
++	g_settings->setBool("disable_wieldlight", disable_wieldlight);
+ 
+ 	// Drop scene manager
+ 	smgr->drop();
+ 
+ 	// Unset render target
+-	driver->setRenderTarget(0, false, true, 0);
++	driver->setRenderTarget(0, false, true);
+ 
+ 	if (params.delete_texture_on_shutdown)
+ 		m_texture_trash.push_back(rtt);
+@@ -1003,7 +1027,8 @@
+ 
+ 
+ 	video::IVideoDriver* driver = m_device->getVideoDriver();
+-	sanity_check(driver);
++	if (!driver)
++		return nullptr;
+ 
+ 	/*
+ 		Parse out the last part of the name of the image and act
+@@ -1065,7 +1090,13 @@
+ 
+ 	core::dimension2d<u32> dim = image->getDimension();
+ 
+-	std::string extensions = (char*) glGetString(GL_EXTENSIONS);
++	porting::irr_device_wait_egl();
++
++	auto ext = (char*) glGetString(GL_EXTENSIONS);
++	if (!ext)
++		return image;
++
++	std::string extensions = ext;
+ 	if (extensions.find("GL_OES_texture_npot") != std::string::npos) {
+ 		return image;
+ 	}
+@@ -1103,7 +1134,8 @@
+ 		video::IImage *& baseimg)
+ {
+ 	video::IVideoDriver* driver = m_device->getVideoDriver();
+-	sanity_check(driver);
++	if (!driver)
++		return false;
+ 
+ 	// Stuff starting with [ are special commands
+ 	if (part_of_name.size() == 0 || part_of_name[0] != '[')
+@@ -1115,9 +1147,9 @@
+ 		if (image == NULL) {
+ 			if (part_of_name != "") {
+ 				if (part_of_name.find("_normal.png") == std::string::npos){
+-					errorstream<<"generateImage(): Could not load image \""
++					infostream<<"generateImage(): Could not load image \""
+ 						<<part_of_name<<"\""<<" while building texture"<<std::endl;
+-					errorstream<<"generateImage(): Creating a dummy"
++					infostream<<"generateImage(): Creating a dummy"
+ 						<<" image for \""<<part_of_name<<"\""<<std::endl;
+ 				} else {
+ 					infostream<<"generateImage(): Could not load normal map \""
+@@ -1131,7 +1163,8 @@
+ 			//core::dimension2d<u32> dim(2,2);
+ 			core::dimension2d<u32> dim(1,1);
+ 			image = driver->createImage(video::ECF_A8R8G8B8, dim);
+-			sanity_check(image != NULL);
++			if (!image)
++				return false;
+ 			/*image->setPixel(0,0, video::SColor(255,255,0,0));
+ 			image->setPixel(1,0, video::SColor(255,0,255,0));
+ 			image->setPixel(0,1, video::SColor(255,0,0,255));
+@@ -1408,7 +1441,8 @@
+ 					transform, baseimg->getDimension());
+ 			video::IImage *image = driver->createImage(
+ 					baseimg->getColorFormat(), dim);
+-			sanity_check(image != NULL);
++			if (!image)
++				return false;
+ 			imageTransform(transform, baseimg, image);
+ 			baseimg->drop();
+ 			baseimg = image;
+@@ -1450,7 +1484,7 @@
+ 				return true;
+ 			}
+ 
+-#ifdef __ANDROID__
++#ifdef WTF__ANDROID__
+ 			assert(img_top->getDimension().Height == npot2(img_top->getDimension().Height));
+ 			assert(img_top->getDimension().Width == npot2(img_top->getDimension().Width));
+ 
+@@ -1589,6 +1623,7 @@
+ 			}
+ 
+ 			v2u32 frame_size = baseimg->getDimension();
++			if (frame_count)
+ 			frame_size.Y /= frame_count;
+ 
+ 			video::IImage *img = driver->createImage(video::ECF_A8R8G8B8,
+@@ -2067,8 +2102,10 @@
+ 	core::dimension2d<u32> dstdim = dst->getDimension();
+ 
+ 	// Pre-conditions
+-	assert(dstdim == imageTransformDimension(transform, src->getDimension()));
+-	assert(transform <= 7);
++	if (!(dstdim == imageTransformDimension(transform, src->getDimension())))
++		return;
++	if (!(transform <= 7))
++		return;
+ 
+ 	/*
+ 		Compute the transformation from source coordinates (sx,sy)
+@@ -2129,6 +2166,8 @@
+ 	video::IVideoDriver *driver = m_device->getVideoDriver();
+ 	video::SColor c(0, 0, 0, 0);
+ 	video::ITexture *texture = getTexture(name);
++	if (!texture)
++		return c;
+ 	video::IImage *image = driver->createImage(texture,
+ 		core::position2d<s32>(0, 0),
+ 		texture->getOriginalSize());
+@@ -2173,7 +2212,8 @@
+ 		video::IVideoDriver *driver = m_device->getVideoDriver();
+ 		video::IImage *flags_image = driver->createImage(
+ 			video::ECF_A8R8G8B8, core::dimension2d<u32>(1, 1));
+-		sanity_check(flags_image != NULL);
++		if(!flags_image)
++			return nullptr;
+ 		video::SColor c(255, normalmap_present ? 255 : 0, 0, 0);
+ 		flags_image->setPixel(0, 0, c);
+ 		insertSourceImage(tname, flags_image);

@@ -1,0 +1,20 @@
+diff -ruN minetest-master/src/jsoncpp/json/UPDATING minetest-freeminer/src/jsoncpp/json/UPDATING
+--- minetest-master/src/jsoncpp/json/UPDATING	2016-09-03 16:15:52.477778000 -0700
++++ minetest-freeminer/src/jsoncpp/json/UPDATING	1969-12-31 16:00:00.000000000 -0800
+@@ -1,16 +0,0 @@
+-#!/bin/sh
+-cd ..
+-svn co https://jsoncpp.svn.sourceforge.net/svnroot/jsoncpp/trunk/jsoncpp jsoncpp
+-svn up jsoncpp
+-cd jsoncpp
+-python amalgamate.py
+-cp -R dist/json ..
+-cp dist/jsoncpp.cpp ../json
+-
+-# maybe you need to patch:
+-# src/json/jsoncpp.cpp:
+-# -#include <json/json.h>
+-# +#include "json/json.h"
+-
+-#svn export --force https://jsoncpp.svn.sourceforge.net/svnroot/jsoncpp/trunk/jsoncpp/src/lib_json json
+-#svn export --force https://jsoncpp.svn.sourceforge.net/svnroot/jsoncpp/trunk/jsoncpp/include/json json

@@ -1,0 +1,200 @@
+diff -ruN minetest-master/src/player.cpp minetest-freeminer/src/player.cpp
+--- minetest-master/src/player.cpp	2016-09-03 16:15:52.689779000 -0700
++++ minetest-freeminer/src/player.cpp	2016-09-03 15:43:59.818740000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++player.cpp
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "player.h"
+@@ -28,11 +31,12 @@
+ #include "settings.h"
+ #include "content_sao.h"
+ #include "filesys.h"
+-#include "log.h"
++#include "log_types.h"
+ #include "porting.h"  // strlcpy
+ 
+ 
+-Player::Player(IGameDef *gamedef, const char *name):
++Player::Player(IGameDef *gamedef, const std::string & name):
++	refs(0),
+ 	got_teleported(false),
+ 	touching_ground(false),
+ 	in_liquid(false),
+@@ -42,11 +46,11 @@
+ 	swimming_vertical(false),
+ 	camera_barely_in_ceiling(false),
+ 	inventory(gamedef->idef()),
+-	hp(PLAYER_MAX_HP),
+ 	hurt_tilt_timer(0),
+ 	hurt_tilt_strength(0),
++	superspeed(false),
++	free_move(false),
+ 	protocol_version(0),
+-	peer_id(PEER_ID_INEXISTENT),
+ 	keyPressed(0),
+ // protected
+ 	m_gamedef(gamedef),
+@@ -55,10 +59,13 @@
+ 	m_yaw(0),
+ 	m_speed(0,0,0),
+ 	m_position(0,0,0),
+-	m_collisionbox(-BS*0.30,0.0,-BS*0.30,BS*0.30,BS*1.75,BS*0.30),
+-	m_dirty(false)
++	m_collisionbox(-BS*0.30,0.0,-BS*0.30,BS*0.30,BS*1.75,BS*0.30)
+ {
+-	strlcpy(m_name, name, PLAYERNAME_SIZE);
++	hp = PLAYER_MAX_HP;
++
++	peer_id = PEER_ID_INEXISTENT;
++	m_name = name;
++	hotbar_image_items = 0;
+ 
+ 	inventory.clear();
+ 	inventory.addList("main", PLAYER_INVENTORY_SIZE);
+@@ -90,6 +97,7 @@
+ 	movement_liquid_fluidity_smooth = 0.5  * BS;
+ 	movement_liquid_sink            = 10   * BS;
+ 	movement_gravity                = 9.81 * BS;
++	movement_fall_aerodynamics      = 110;
+ 	local_animation_speed           = 0.0;
+ 
+ 	// Movement overrides are multipliers and must be 1 by default
+@@ -146,10 +154,9 @@
+ 				playername + " not found!");
+ 	}
+ 
+-	m_dirty = true;
+ 	//args.getS32("version"); // Version field value not used
+ 	std::string name = args.get("name");
+-	strlcpy(m_name, name.c_str(), PLAYERNAME_SIZE);
++	m_name = name;
+ 	setPitch(args.getFloat("pitch"));
+ 	setYaw(args.getFloat("yaw"));
+ 	setPosition(args.getV3F("position"));
+@@ -227,7 +234,7 @@
+ 	}
+ }
+ 
+-RemotePlayer::RemotePlayer(IGameDef *gamedef, const char *name):
++RemotePlayer::RemotePlayer(IGameDef *gamedef, const std::string & name):
+ 	Player(gamedef, name),
+ 	m_sao(NULL)
+ {
+@@ -245,6 +252,7 @@
+ 	movement_gravity                = g_settings->getFloat("movement_gravity")                * BS;
+ }
+ 
++#if WTF
+ void RemotePlayer::save(std::string savedir)
+ {
+ 	/*
+@@ -293,6 +301,7 @@
+ 	infostream << "Didn't find free file for player " << m_name << std::endl;
+ 	return;
+ }
++#endif
+ 
+ /*
+ 	RemotePlayer
+@@ -304,3 +313,72 @@
+ 		m_sao->setBasePosition(position);
+ }
+ 
++
++
++void Player::addSpeed(v3f speed) {
++		auto lock = lock_unique_rec();
++		m_speed += speed;
++}
++
++Json::Value operator<<(Json::Value &json, v3f &v) {
++	json["X"] = v.X;
++	json["Y"] = v.Y;
++	json["Z"] = v.Z;
++	return json;
++}
++
++Json::Value operator>>(Json::Value &json, v3f &v) {
++	v.X = json["X"].asFloat();
++	v.Y = json["Y"].asFloat();
++	v.Z = json["Z"].asFloat();
++	return json;
++}
++
++Json::Value operator<<(Json::Value &json, Player &player) {
++	std::ostringstream ss(std::ios_base::binary);
++	//todo
++	player.inventory.serialize(ss);
++	json["inventory_old"] = ss.str();
++
++	json["name"] = player.m_name;
++	json["pitch"] = player.getPitch();
++	json["yaw"] = player.getYaw();
++	auto pos = player.getPosition();
++	json["position"] << pos;
++	json["hp"] = player.hp.load();
++	json["breath"] = player.getBreath();
++	return json;
++}
++
++Json::Value operator>>(Json::Value &json, Player &player) {
++	player.updateName(json["name"].asCString());
++	player.setPitch(json["pitch"].asFloat());
++	player.setYaw(json["yaw"].asFloat());
++	v3f position;
++	json["position"]>>position;
++	player.setPosition(position);
++	player.hp = json["hp"].asInt();
++	player.m_breath = json["breath"].asInt();
++
++	//todo
++	std::istringstream ss(json["inventory_old"].asString());
++	auto & inventory = player.inventory;
++	inventory.deSerialize(ss);
++
++	if(inventory.getList("craftpreview") == NULL)
++	{
++		// Convert players without craftpreview
++		inventory.addList("craftpreview", 1);
++
++		bool craftresult_is_preview = true;
++		//if(args.exists("craftresult_is_preview"))
++		//	craftresult_is_preview = args.getBool("craftresult_is_preview");
++		if(craftresult_is_preview)
++		{
++			// Clear craftresult
++			inventory.getList("craftresult")->changeItem(0, ItemStack());
++		}
++	}
++
++	return json;
++}

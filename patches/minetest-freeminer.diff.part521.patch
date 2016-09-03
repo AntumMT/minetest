@@ -1,0 +1,97 @@
+diff -ruN minetest-master/src/staticobject.h minetest-freeminer/src/staticobject.h
+--- minetest-master/src/staticobject.h	2016-09-03 16:15:52.489778000 -0700
++++ minetest-freeminer/src/staticobject.h	2016-09-03 15:43:59.502738000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++staticobject.h
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #ifndef STATICOBJECT_HEADER
+@@ -26,6 +29,7 @@
+ #include <vector>
+ #include <map>
+ #include "debug.h"
++#include "threading/concurrent_map.h"
+ 
+ struct StaticObject
+ {
+@@ -46,7 +50,7 @@
+ 	}
+ 
+ 	void serialize(std::ostream &os);
+-	void deSerialize(std::istream &is, u8 version);
++	bool deSerialize(std::istream &is, u8 version);
+ };
+ 
+ class StaticObjectList
+@@ -58,6 +62,7 @@
+ 	*/
+ 	void insert(u16 id, StaticObject obj)
+ 	{
++		auto lock = m_active.lock_unique_rec();
+ 		if(id == 0)
+ 		{
+ 			m_stored.push_back(obj);
+@@ -68,19 +73,23 @@
+ 			{
+ 				dstream<<"ERROR: StaticObjectList::insert(): "
+ 						<<"id already exists"<<std::endl;
+-				FATAL_ERROR("StaticObjectList::insert()");
++				return;
+ 			}
+-			m_active[id] = obj;
++			m_active.set(id, obj);
+ 		}
+ 	}
+ 
+ 	void remove(u16 id)
+ 	{
+-		assert(id != 0); // Pre-condition
++		if (!id)
++			return;
++		auto lock = m_active.lock_shared_rec();
+ 		if(m_active.find(id) == m_active.end())
+ 		{
++			/*
+ 			warningstream<<"StaticObjectList::remove(): id="<<id
+ 					<<" not found"<<std::endl;
++			*/
+ 			return;
+ 		}
+ 		m_active.erase(id);
+@@ -95,7 +104,7 @@
+ 		The caller directly manipulates these containers.
+ 	*/
+ 	std::vector<StaticObject> m_stored;
+-	std::map<u16, StaticObject> m_active;
++	concurrent_map<u16, StaticObject> m_active;
+ 
+ private:
+ };

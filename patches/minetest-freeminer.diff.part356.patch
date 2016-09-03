@@ -1,0 +1,12 @@
+diff -ruN minetest-master/src/mapgen_valleys.h minetest-freeminer/src/mapgen_valleys.h
+--- minetest-master/src/mapgen_valleys.h	2016-09-03 16:15:52.677779000 -0700
++++ minetest-freeminer/src/mapgen_valleys.h	2016-09-03 15:43:59.810740000 -0700
+@@ -70,7 +70,7 @@
+ 	MapgenValleysParams();
+ 	~MapgenValleysParams() {}
+ 
+-	void readParams(const Settings *settings);
++	void readParams(Settings *settings);
+ 	void writeParams(Settings *settings) const;
+ };
+ 

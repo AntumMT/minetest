@@ -1,0 +1,309 @@
+diff -ruN minetest-master/src/player.h minetest-freeminer/src/player.h
+--- minetest-master/src/player.h	2016-09-03 16:15:52.717779000 -0700
++++ minetest-freeminer/src/player.h	2016-09-03 15:43:59.834740000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++player.h
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #ifndef PLAYER_HEADER
+@@ -25,6 +28,8 @@
+ #include "constants.h" // BS
+ #include "threading/mutex.h"
+ #include <list>
++#include "threading/lock.h"
++#include "json/json.h"
+ 
+ #define PLAYERNAME_SIZE 20
+ 
+@@ -109,10 +114,11 @@
+ // Do *not* perform an assignment or copy operation on a Player or
+ // RemotePlayer object!  This will copy the lock held for HUD synchronization
+ class Player
++: public locker<>
+ {
+ public:
+ 
+-	Player(IGameDef *gamedef, const char *name);
++	Player(IGameDef *gamedef, const std::string & name);
+ 	virtual ~Player() = 0;
+ 
+ 	virtual void move(f32 dtime, Environment *env, f32 pos_max_d)
+@@ -123,16 +129,21 @@
+ 
+ 	v3f getSpeed()
+ 	{
++		auto lock = lock_shared_rec();
+ 		return m_speed;
+ 	}
+ 
+ 	void setSpeed(v3f speed)
+ 	{
++		auto lock = lock_unique_rec();
+ 		m_speed = speed;
+ 	}
+ 
++	void addSpeed(v3f speed);
++
+ 	v3f getPosition()
+ 	{
++		auto lock = lock_shared_rec();
+ 		return m_position;
+ 	}
+ 
+@@ -146,49 +157,49 @@
+ 
+ 	v3f getEyePosition()
+ 	{
++		auto lock = lock_shared_rec();
+ 		return m_position + getEyeOffset();
+ 	}
+ 
+ 	virtual void setPosition(const v3f &position)
+ 	{
+-		if (position != m_position)
+-			m_dirty = true;
++		auto lock = lock_unique_rec();
+ 		m_position = position;
+ 	}
+ 
+ 	void setPitch(f32 pitch)
+ 	{
+-		if (pitch != m_pitch)
+-			m_dirty = true;
++		auto lock = lock_unique_rec();
+ 		m_pitch = pitch;
+ 	}
+ 
+ 	virtual void setYaw(f32 yaw)
+ 	{
+-		if (yaw != m_yaw)
+-			m_dirty = true;
++		auto lock = lock_unique_rec();
+ 		m_yaw = yaw;
+ 	}
+ 
+ 	f32 getPitch()
+ 	{
++		auto lock = lock_shared_rec();
+ 		return m_pitch;
+ 	}
+ 
+ 	f32 getYaw()
+ 	{
++		auto lock = lock_shared_rec();
+ 		return m_yaw;
+ 	}
+ 
+ 	u16 getBreath()
+ 	{
++		auto lock = lock_shared_rec();
+ 		return m_breath;
+ 	}
+ 
+ 	virtual void setBreath(u16 breath)
+ 	{
+-		if (breath != m_breath)
+-			m_dirty = true;
++		auto lock = lock_unique_rec();
+ 		m_breath = breath;
+ 	}
+ 
+@@ -204,6 +215,11 @@
+ 		return (m_yaw + 90.) * core::DEGTORAD;
+ 	}
+ 
++	void updateName(const std::string &name)
++	{
++		m_name = name;
++	}
++
+ 	f32 getRadPitch()
+ 	{
+ 		return m_pitch * core::DEGTORAD;
+@@ -214,7 +230,7 @@
+ 		return m_yaw * core::DEGTORAD;
+ 	}
+ 
+-	const char *getName() const
++	const std::string & getName() const
+ 	{
+ 		return m_name;
+ 	}
+@@ -245,21 +261,21 @@
+ 
+ 	void setHotbarImage(const std::string &name)
+ 	{
+-		hud_hotbar_image = name;
++		hotbar_image = name;
+ 	}
+ 
+ 	std::string getHotbarImage()
+ 	{
+-		return hud_hotbar_image;
++		return hotbar_image;
+ 	}
+ 
+ 	void setHotbarSelectedImage(const std::string &name)
+ 	{
+-		hud_hotbar_selected_image = name;
++		hotbar_selected_image = name;
+ 	}
+ 
+ 	std::string getHotbarSelectedImage() {
+-		return hud_hotbar_selected_image;
++		return hotbar_selected_image;
+ 	}
+ 
+ 	void setSky(const video::SColor &bgcolor, const std::string &type,
+@@ -316,7 +332,9 @@
+ 
+ 	virtual void setPlayerSAO(PlayerSAO *sao)
+ 	{
++		/*
+ 		FATAL_ERROR("FIXME");
++		*/
+ 	}
+ 
+ 	/*
+@@ -327,17 +345,7 @@
+ 	void serialize(std::ostream &os);
+ 	void deSerialize(std::istream &is, std::string playername);
+ 
+-	bool checkModified() const
+-	{
+-		return m_dirty || inventory.checkModified();
+-	}
+-
+-	void setModified(const bool x)
+-	{
+-		m_dirty = x;
+-		if (x == false)
+-			inventory.setModified(x);
+-	}
++	s16 refs;
+ 
+ 	// Use a function, if isDead can be defined by other conditions
+ 	bool isDead() { return hp == 0; }
+@@ -349,7 +357,7 @@
+ 	// This is more stable and defines the maximum speed of the player
+ 	bool in_liquid_stable;
+ 	// Gets the viscosity of water to calculate friction
+-	u8 liquid_viscosity;
++	float liquid_viscosity;
+ 	bool is_climbing;
+ 	bool swimming_vertical;
+ 	bool camera_barely_in_ceiling;
+@@ -370,6 +378,7 @@
+ 	f32 movement_liquid_fluidity_smooth;
+ 	f32 movement_liquid_sink;
+ 	f32 movement_gravity;
++	f32 movement_fall_aerodynamics;
+ 
+ 	float physics_override_speed;
+ 	float physics_override_jump;
+@@ -380,19 +389,25 @@
+ 	v2s32 local_animations[4];
+ 	float local_animation_speed;
+ 
+-	u16 hp;
++	std::atomic_ushort hp;
+ 
+ 	float hurt_tilt_timer;
+ 	float hurt_tilt_strength;
+ 
++	bool zoom = false;
++	bool superspeed;
++	bool free_move;
++
+ 	u16 protocol_version;
+-	u16 peer_id;
++	std::atomic_short peer_id;
+ 
+ 	std::string inventory_formspec;
+ 
+ 	PlayerControl control;
+-	PlayerControl getPlayerControl()
++	Mutex control_mutex;
++	PlayerControl & getPlayerControl()
+ 	{
++		std::lock_guard<Mutex> lock(control_mutex);
+ 		return control;
+ 	}
+ 
+@@ -409,12 +424,14 @@
+ 
+ 	u32 hud_flags;
+ 	s32 hud_hotbar_itemcount;
+-	std::string hud_hotbar_image;
+-	std::string hud_hotbar_selected_image;
++	std::string hotbar_image;
++	int hotbar_image_items;
++	std::string hotbar_selected_image;
+ protected:
+ 	IGameDef *m_gamedef;
+ 
+-	char m_name[PLAYERNAME_SIZE];
++public:
++	std::string m_name;
+ 	u16 m_breath;
+ 	f32 m_pitch;
+ 	f32 m_yaw;
+@@ -422,8 +439,6 @@
+ 	v3f m_position;
+ 	aabb3f m_collisionbox;
+ 
+-	bool m_dirty;
+-
+ 	std::vector<HudElement *> hud;
+ 
+ 	std::string m_sky_type;
+@@ -446,11 +461,9 @@
+ class RemotePlayer : public Player
+ {
+ public:
+-	RemotePlayer(IGameDef *gamedef, const char *name);
++	RemotePlayer(IGameDef *gamedef, const std::string & name);
+ 	virtual ~RemotePlayer() {}
+ 
+-	void save(std::string savedir);
+-
+ 	PlayerSAO *getPlayerSAO()
+ 	{ return m_sao; }
+ 	void setPlayerSAO(PlayerSAO *sao)
+@@ -461,5 +474,8 @@
+ 	PlayerSAO *m_sao;
+ };
+ 
++Json::Value operator<<(Json::Value &json, Player &player);
++Json::Value operator>>(Json::Value &json, Player &player);
++
+ #endif
+ 

@@ -1,0 +1,21 @@
+diff -ruN minetest-master/builtin/game/statbars.lua minetest-freeminer/builtin/game/statbars.lua
+--- minetest-master/builtin/game/statbars.lua	2016-09-03 16:15:52.569779000 -0700
++++ minetest-freeminer/builtin/game/statbars.lua	2016-09-03 15:43:59.726739000 -0700
+@@ -7,7 +7,7 @@
+ 	number = 20,
+ 	direction = 0,
+ 	size = { x=24, y=24 },
+-	offset = { x=(-10*24)-25, y=-(48+24+16)},
++	offset = { x=(-10*24)-25, y=-(48+24+24) },
+ }
+ 
+ local breath_bar_definition =
+@@ -18,7 +18,7 @@
+ 	number = 20,
+ 	direction = 0,
+ 	size = { x=24, y=24 },
+-	offset = {x=25,y=-(48+24+16)},
++	offset = { x=25, y=-(48+24+24) },
+ }
+ 
+ local hud_ids = {}

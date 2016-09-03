@@ -1,0 +1,128 @@
+diff -ruN minetest-master/src/mapgen.h minetest-freeminer/src/mapgen.h
+--- minetest-master/src/mapgen.h	2016-09-03 16:15:52.681779000 -0700
++++ minetest-freeminer/src/mapgen.h	2016-09-03 15:43:59.994741000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++mapgen.h
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #ifndef MAPGEN_HEADER
+@@ -26,8 +29,8 @@
+ #include "util/string.h"
+ #include "util/container.h"
+ 
+-#define MAPGEN_DEFAULT MAPGEN_V6
+-#define MAPGEN_DEFAULT_NAME "v6"
++#define MAPGEN_DEFAULT MAPGEN_INDEV
++#define MAPGEN_DEFAULT_NAME "indev"
+ 
+ /////////////////// Mapgen flags
+ #define MG_TREES       0x01  // Deprecated. Moved into mgv6 flags
+@@ -49,6 +52,7 @@
+ class Biome;
+ class BiomeGen;
+ struct BiomeParams;
++struct BiomeParamsOriginal;
+ class BiomeManager;
+ class EmergeManager;
+ class MapBlock;
+@@ -109,6 +113,9 @@
+ };
+ 
+ enum MapgenType {
++	MAPGEN_INDEV,
++	MAPGEN_MATH,
++
+ 	MAPGEN_V5,
+ 	MAPGEN_V6,
+ 	MAPGEN_V7,
+@@ -124,15 +131,18 @@
+ 	s16 chunksize;
+ 	u64 seed;
+ 	s16 water_level;
++	s16 liquid_pressure;
+ 	u32 flags;
+ 
+-	BiomeParams *bparams;
++	BiomeParamsOriginal *bparams;
++	//MapgenSpecificParams *sparams;
+ 
+ 	MapgenParams() :
+ 		mgtype(MAPGEN_DEFAULT),
+ 		chunksize(5),
+ 		seed(0),
+ 		water_level(1),
++		liquid_pressure(0),
+ 		flags(MG_CAVES | MG_LIGHT | MG_DECORATIONS),
+ 		bparams(NULL)
+ 	{
+@@ -140,7 +150,7 @@
+ 
+ 	virtual ~MapgenParams();
+ 
+-	virtual void readParams(const Settings *settings);
++	virtual void readParams(Settings *settings);
+ 	virtual void writeParams(Settings *settings) const;
+ };
+ 
+@@ -185,10 +195,10 @@
+ 	s16 findGroundLevel(v2s16 p2d, s16 ymin, s16 ymax);
+ 	s16 findLiquidSurface(v2s16 p2d, s16 ymin, s16 ymax);
+ 	void updateHeightmap(v3s16 nmin, v3s16 nmax);
+-	void updateLiquid(UniqueQueue<v3s16> *trans_liquid, v3s16 nmin, v3s16 nmax);
++	void updateLiquid(v3s16 nmin, v3s16 nmax);
+ 
+ 	void setLighting(u8 light, v3s16 nmin, v3s16 nmax);
+-	void lightSpread(VoxelArea &a, v3s16 p, u8 light);
++	void lightSpread(VoxelArea &a, v3s16 p, u8 light, unordered_map_v3POS<u8> & skip, int r = 0);
+ 	void calcLighting(v3s16 nmin, v3s16 nmax, v3s16 full_nmin, v3s16 full_nmax,
+ 		bool propagate_shadow = true);
+ 	void propagateSunlight(v3s16 nmin, v3s16 nmax, bool propagate_shadow);
+@@ -197,6 +207,12 @@
+ 	virtual void makeChunk(BlockMakeData *data) {}
+ 	virtual int getGroundLevelAtPoint(v2s16 p) { return 0; }
+ 
++	// freeminer:
++	EmergeManager *m_emerge;
++	s16 liquid_pressure;
++	unordered_map_v3POS<s16> heat_cache;
++	unordered_map_v3POS<s16> humidity_cache;
++
+ 	// getSpawnLevelAtPoint() is a function within each mapgen that returns a
+ 	// suitable y co-ordinate for player spawn ('suitable' usually meaning
+ 	// within 16 nodes of water_level). If a suitable spawn level cannot be
+@@ -258,6 +274,7 @@
+ 	// Content required for generateBiomes
+ 	content_t c_stone;
+ 	content_t c_water_source;
++	content_t c_ice;
+ 	content_t c_river_water_source;
+ 	content_t c_desert_stone;
+ 	content_t c_sandstone;

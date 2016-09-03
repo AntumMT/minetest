@@ -1,0 +1,53 @@
+diff -ruN minetest-master/src/chat.h minetest-freeminer/src/chat.h
+--- minetest-master/src/chat.h	2016-09-03 16:15:52.549779000 -0700
++++ minetest-freeminer/src/chat.h	2016-09-03 15:43:59.650739000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++chat.h
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #ifndef CHAT_HEADER
+@@ -24,6 +27,7 @@
+ #include <vector>
+ #include <list>
+ 
++//#include "FMColoredString.h"
+ #include "irrlichttypes.h"
+ #include "util/enriched_string.h"
+ 
+@@ -171,6 +175,8 @@
+ 	// Replace the current line with the given text
+ 	std::wstring replace(std::wstring line);
+ 
++	// Add a line to history
++	void historyPush(std::wstring line);
+ 	// Select previous command from history
+ 	void historyPrev();
+ 	// Select next command from history

@@ -1,0 +1,67 @@
+diff -ruN minetest-master/src/minimap.h minetest-freeminer/src/minimap.h
+--- minetest-master/src/minimap.h	2016-09-03 16:15:52.669779000 -0700
++++ minetest-freeminer/src/minimap.h	2016-09-03 15:43:59.802740000 -0700
+@@ -30,6 +30,8 @@
+ #include <vector>
+ #include "camera.h"
+ 
++#include "util/unordered_map_hash.h"
++
+ #define MINIMAP_MAX_SX 512
+ #define MINIMAP_MAX_SY 512
+ 
+@@ -72,7 +74,7 @@
+ 	u16 scan_height;
+ 	u16 map_size;
+ 	MinimapPixel minimap_scan[MINIMAP_MAX_SX * MINIMAP_MAX_SY];
+-	bool map_invalidated;
++	std::atomic_bool map_invalidated;
+ 	bool minimap_shape_round;
+ 	video::IImage *minimap_image;
+ 	video::IImage *heightmap_image;
+@@ -83,6 +85,7 @@
+ 	video::ITexture *minimap_overlay_round;
+ 	video::ITexture *minimap_overlay_square;
+ 	video::ITexture *player_marker;
++	Mutex m_mutex;
+ 	video::ITexture *object_marker_red;
+ };
+ 
+@@ -93,7 +96,7 @@
+ 
+ class MinimapUpdateThread : public UpdateThread {
+ public:
+-	MinimapUpdateThread() : UpdateThread("Minimap") {}
++	MinimapUpdateThread() : UpdateThread("Minimap") { next_update = 0; }
+ 	virtual ~MinimapUpdateThread();
+ 
+ 	void getMap(v3s16 pos, s16 size, s16 height, bool radar);
+@@ -107,6 +110,7 @@
+ 	bool popBlockUpdate(QueuedMinimapUpdate *update);
+ 
+ 	MinimapData *data;
++	std::atomic_uint next_update;
+ 
+ protected:
+ 	virtual void doUpdate();
+@@ -114,7 +118,9 @@
+ private:
+ 	Mutex m_queue_mutex;
+ 	std::deque<QueuedMinimapUpdate> m_update_queue;
+-	std::map<v3s16, MinimapMapblock *> m_blocks_cache;
++	unordered_map_v3POS<MinimapMapblock *> m_blocks_cache;
++	//simple: unordered_map_v2POS<std::vector<MinimapMapblock*>> getmap_cache
++	unordered_map_v2POS<std::map<POS, MinimapMapblock*>> getmap_cache;
+ };
+ 
+ class Mapper {
+@@ -157,7 +163,9 @@
+ 	bool m_enable_shaders;
+ 	u16 m_surface_mode_scan_height;
+ 	f32 m_angle;
++/*
+ 	Mutex m_mutex;
++*/
+ 	std::list<v2f> m_active_markers;
+ };
+ 

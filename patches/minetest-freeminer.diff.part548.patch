@@ -1,0 +1,59 @@
+diff -ruN minetest-master/src/unittest/test_connection.cpp minetest-freeminer/src/unittest/test_connection.cpp
+--- minetest-master/src/unittest/test_connection.cpp	2016-09-03 16:15:52.545779000 -0700
++++ minetest-freeminer/src/unittest/test_connection.cpp	2016-09-03 15:43:59.894740000 -0700
+@@ -25,6 +25,8 @@
+ #include "util/serialize.h"
+ #include "network/connection.h"
+ 
++#include "config.h"
++
+ class TestConnection : public TestBase {
+ public:
+ 	TestConnection()
+@@ -45,10 +47,14 @@
+ 
+ void TestConnection::runTests(IGameDef *gamedef)
+ {
++#if MINETEST_PROTO
+ 	TEST(testHelpers);
+ 	TEST(testConnectSendReceive);
++#endif
+ }
+ 
++#if MINETEST_PROTO
++
+ ////////////////////////////////////////////////////////////////////////////////
+ 
+ struct Handler : public con::PeerHandler
+@@ -60,19 +66,19 @@
+ 		name = a_name;
+ 	}
+ 
+-	void peerAdded(con::Peer *peer)
++	void peerAdded(u16 peer_id)
+ 	{
+ 		infostream << "Handler(" << name << ")::peerAdded(): "
+-			"id=" << peer->id << std::endl;
+-		last_id = peer->id;
++			"id=" << peer_id << std::endl;
++		last_id = peer_id;
+ 		count++;
+ 	}
+ 
+-	void deletingPeer(con::Peer *peer, bool timeout)
++	void deletingPeer(u16 peer_id, bool timeout)
+ 	{
+ 		infostream << "Handler(" << name << ")::deletingPeer(): "
+-			"id=" << peer->id << ", timeout=" << timeout << std::endl;
+-		last_id = peer->id;
++			"id=" << peer_id << ", timeout=" << timeout << std::endl;
++		last_id = peer_id;
+ 		count--;
+ 	}
+ 
+@@ -346,3 +352,5 @@
+ 	UASSERT(hand_server.count == 1);
+ 	UASSERT(hand_server.last_id == 2);
+ }
++
++#endif

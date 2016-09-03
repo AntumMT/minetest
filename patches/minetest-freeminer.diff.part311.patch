@@ -1,0 +1,76 @@
+diff -ruN minetest-master/src/keycode.cpp minetest-freeminer/src/keycode.cpp
+--- minetest-master/src/keycode.cpp	2016-09-03 16:15:52.457778000 -0700
++++ minetest-freeminer/src/keycode.cpp	2016-09-03 15:43:59.482738000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++keycode.cpp
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "keycode.h"
+@@ -170,6 +173,9 @@
+ 	CHECKKEY(KEY_COMMA)
+ 	CHECKKEY(KEY_MINUS)
+ 	CHECKKEY(KEY_PERIOD)
++#if IRRLICHT_VERSION_10000  >= 10703
++	CHECKKEY(KEY_OEM_3)
++#endif
+ 	CHECKKEY(KEY_ATTN)
+ 	CHECKKEY(KEY_CRSEL)
+ 	CHECKKEY(KEY_EXSEL)
+@@ -210,7 +216,7 @@
+ 		"-", "-", "-", "-", "-", "KEY_LSHIFT", "KEY_RSHIFT", "KEY_LCONTROL",
+ 		"KEY_RCONTROL", "KEY_LMENU", "KEY_RMENU", "-", "-", "-", "-", "-",
+ 		"-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-",
+-		"-", "-", "KEY_PLUS", "KEY_COMMA", "KEY_MINUS", "KEY_PERIOD", "-", "-", "-", "-", "-",
++		"-", "-", "KEY_PLUS", "KEY_COMMA", "KEY_MINUS", "KEY_PERIOD", "-", "KEY_OEM_3", "-", "-", "-",
+ 		"-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-",
+ 		"-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-",
+ 		"-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-",
+@@ -240,7 +246,7 @@
+ 			"-", "-", "-", "-", "-", "-", "-", N_("Left Shift"), N_("Right Shift"),
+ 			N_("Left Control"), N_("Right Control"), N_("Left Menu"), N_("Right Menu"), "-", "-",
+ 			"-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-",
+-			"-", "-", "-", "-", "-", N_("Plus"), N_("Comma"), N_("Minus"), N_("Period"), "-", "-",
++			"-", "-", "-", "-", "-", N_("Plus"), N_("Comma"), N_("Minus"), N_("Period"), "-", N_("Tilde"),
+ 			"-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-",
+ 			"-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-",
+ 			"-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-",
+@@ -339,6 +345,11 @@
+ 	}
+ }
+ 
++const KeyPress LControlKey("KEY_LCONTROL");
++const KeyPress RControlKey("KEY_RCONTROL");
++const KeyPress LShiftKey("KEY_LSHIFT");
++const KeyPress RShiftKey("KEY_RSHIFT");
++
+ const KeyPress EscapeKey("KEY_ESCAPE");
+ const KeyPress CancelKey("KEY_CANCEL");
+ const KeyPress NumberKey[] = {

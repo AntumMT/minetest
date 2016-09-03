@@ -1,0 +1,290 @@
+diff -ruN minetest-master/src/clientiface.h minetest-freeminer/src/clientiface.h
+--- minetest-master/src/clientiface.h	2016-09-03 16:15:52.505778000 -0700
++++ minetest-freeminer/src/clientiface.h	2016-09-03 15:43:59.514738000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++clientiface.h
+ Copyright (C) 2010-2014 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ #ifndef _CLIENTIFACE_H_
+ #define _CLIENTIFACE_H_
+@@ -24,6 +27,9 @@
+ #include "constants.h"
+ #include "serialization.h"             // for SER_FMT_VER_INVALID
+ #include "threading/mutex.h"
++#include "threading/concurrent_map.h"
++#include "threading/concurrent_unordered_map.h"
++#include "util/unordered_map_hash.h"
+ #include "network/networkpacket.h"
+ 
+ #include <list>
+@@ -31,6 +37,8 @@
+ #include <map>
+ #include <set>
+ 
++#include "msgpack_fix.h"
++
+ class MapBlock;
+ class ServerEnvironment;
+ class EmergeManager;
+@@ -221,6 +229,7 @@
+ };
+ 
+ class RemoteClient
++ : public locker<>
+ {
+ public:
+ 	// peer_id=0 means this client has no associated peer
+@@ -231,7 +240,17 @@
+ 	// The serialization version to use with the client
+ 	u8 serialization_version;
+ 	//
+-	u16 net_proto_version;
++	std::atomic_ushort net_proto_version;
++	u16 net_proto_version_fm;
++
++	std::atomic_int m_nearest_unsent_reset;
++	std::atomic_int wanted_range;
++	std::atomic_int range_all;
++	std::atomic_int farmesh;
++	float fov;
++	//bool block_overflow;
++
++	ServerEnvironment *m_env;
+ 
+ 	/* Authentication information */
+ 	std::string enc_pwd;
+@@ -246,19 +265,17 @@
+ 	bool isMechAllowed(AuthMechanism mech)
+ 	{ return allowed_auth_mechs & mech; }
+ 
+-	RemoteClient():
++	RemoteClient(ServerEnvironment *env):
+ 		peer_id(PEER_ID_INEXISTENT),
+ 		serialization_version(SER_FMT_VER_INVALID),
+-		net_proto_version(0),
++		m_env(env),
+ 		create_player_on_auth_success(false),
+ 		chosen_mech(AUTH_MECHANISM_NONE),
+ 		auth_data(NULL),
+ 		m_time_from_building(9999),
+ 		m_pending_serialization_version(SER_FMT_VER_INVALID),
+ 		m_state(CS_Created),
+-		m_nearest_unsent_d(0),
+ 		m_nearest_unsent_reset_timer(0.0),
+-		m_excess_gotblocks(0),
+ 		m_nothing_to_send_pause_timer(0.0),
+ 		m_name(""),
+ 		m_version_major(0),
+@@ -268,6 +285,16 @@
+ 		m_deployed_compression(0),
+ 		m_connection_time(getTime(PRECISION_SECONDS))
+ 	{
++		net_proto_version = 0;
++		net_proto_version_fm = 0;
++		m_nearest_unsent_d = 0;
++		m_nearest_unsent_reset = 0;
++
++		wanted_range = 9 * MAP_BLOCKSIZE;
++		range_all = 0;
++		farmesh = 0;
++		fov = 72; // g_settings->getFloat("fov");
++		//block_overflow = 0;
+ 	}
+ 	~RemoteClient()
+ 	{
+@@ -278,15 +305,15 @@
+ 		Environment should be locked when this is called.
+ 		dtime is used for resetting send radius at slow interval
+ 	*/
+-	void GetNextBlocks(ServerEnvironment *env, EmergeManager* emerge,
+-			float dtime, std::vector<PrioritySortedBlockTransfer> &dest);
+-
+-	void GotBlock(v3s16 p);
++	int GetNextBlocks(ServerEnvironment *env, EmergeManager* emerge,
++			float dtime, double m_uptime, std::vector<PrioritySortedBlockTransfer> &dest);
+ 
+-	void SentBlock(v3s16 p);
++	void SentBlock(v3s16 p, double time);
+ 
+ 	void SetBlockNotSent(v3s16 p);
+ 	void SetBlocksNotSent(std::map<v3s16, MapBlock*> &blocks);
++	void SetBlocksNotSent();
++	void SetBlockDeleted(v3s16 p);
+ 
+ 	/**
+ 	 * tell client about this block being modified right now.
+@@ -298,7 +325,7 @@
+ 
+ 	s32 SendingCount()
+ 	{
+-		return m_blocks_sending.size();
++		return 0; //return m_blocks_sending.size();
+ 	}
+ 
+ 	// Increments timeouts and removes timed-out blocks from list
+@@ -310,11 +337,9 @@
+ 	{
+ 		o<<"RemoteClient "<<peer_id<<": "
+ 				<<"m_blocks_sent.size()="<<m_blocks_sent.size()
+-				<<", m_blocks_sending.size()="<<m_blocks_sending.size()
+ 				<<", m_nearest_unsent_d="<<m_nearest_unsent_d
+-				<<", m_excess_gotblocks="<<m_excess_gotblocks
++				<<", wanted_range="<<wanted_range
+ 				<<std::endl;
+-		m_excess_gotblocks = 0;
+ 	}
+ 
+ 	// Time from last placing or removing blocks
+@@ -323,7 +348,7 @@
+ 	/*
+ 		List of active objects that the client knows of.
+ 	*/
+-	std::set<u16> m_known_objects;
++	maybe_concurrent_unordered_map<u16, bool> m_known_objects;
+ 
+ 	ClientState getState()
+ 		{ return m_state; }
+@@ -379,22 +404,18 @@
+ 		List of block positions.
+ 		No MapBlock* is stored here because the blocks can get deleted.
+ 	*/
+-	std::set<v3s16> m_blocks_sent;
+-	s16 m_nearest_unsent_d;
++	concurrent_unordered_map<v3POS, unsigned int, v3POSHash, v3POSEqual> m_blocks_sent;
++	unsigned int m_nearest_unsent_reset_want = 0;
++
++public:
++	std::atomic_int m_nearest_unsent_d;
++private:
++
+ 	v3s16 m_last_center;
++	v3f   m_last_direction;
+ 	float m_nearest_unsent_reset_timer;
+ 
+ 	/*
+-		Blocks that are currently on the line.
+-		This is used for throttling the sending of blocks.
+-		- The size of this list is limited to some value
+-		Block is added when it is sent with BLOCKDATA.
+-		Block is removed when GOTBLOCKS is received.
+-		Value is time from sending. (not used at the moment)
+-	*/
+-	std::map<v3s16, float> m_blocks_sending;
+-
+-	/*
+ 		Blocks that have been modified since last sending them.
+ 		These blocks will not be marked as sent, even if the
+ 		client reports it has received them to account for blocks
+@@ -402,7 +423,7 @@
+ 
+ 		List of block positions.
+ 	*/
+-	std::set<v3s16> m_blocks_modified;
++	//std::set<v3s16> m_blocks_modified;
+ 
+ 	/*
+ 		Count of excess GotBlocks().
+@@ -411,7 +432,7 @@
+ 		and the client then sends two GOTBLOCKs.
+ 		This is resetted by PrintInfo()
+ 	*/
+-	u32 m_excess_gotblocks;
++	//u32 m_excess_gotblocks;
+ 
+ 	// CPU usage optimization
+ 	float m_nothing_to_send_pause_timer;
+@@ -458,7 +479,14 @@
+ 	/* send message to client */
+ 	void send(u16 peer_id, u8 channelnum, NetworkPacket* pkt, bool reliable);
+ 
++	/* send message to client */
++	void send(u16 peer_id, u8 channelnum, const msgpack::sbuffer &data, bool reliable);
++
++	void send(u16 peer_id, u8 channelnum, SharedBuffer<u8> data, bool reliable); //todo: delete
++
+ 	/* send to all clients */
++	void sendToAll(u16 channelnum, SharedBuffer<u8> data, bool reliable);
++	void sendToAll(u16 channelnum, msgpack::sbuffer const &buffer, bool reliable);
+ 	void sendToAll(u16 channelnum, NetworkPacket* pkt, bool reliable);
+ 
+ 	/* delete a client */
+@@ -467,6 +495,8 @@
+ 	/* create client */
+ 	void CreateClient(u16 peer_id);
+ 
++	std::shared_ptr<RemoteClient> getClient(u16 peer_id,  ClientState state_min=CS_Active);
++
+ 	/* get a client by peer_id */
+ 	RemoteClient* getClientNoEx(u16 peer_id,  ClientState state_min=CS_Active);
+ 
+@@ -499,11 +529,21 @@
+ 
+ protected:
+ 	//TODO find way to avoid this functions
+-	void lock() { m_clients_mutex.lock(); }
+-	void unlock() { m_clients_mutex.unlock(); }
++	void lock() { /*m_clients_mutex.lock();*/ }
++	void unlock() { /*m_clients_mutex.unlock();*/ }
++
+ 
+-	std::map<u16, RemoteClient*>& getClientList()
+-		{ return m_clients; }
++public:
++	std::vector<std::shared_ptr<RemoteClient>> getClientList() {
++		std::vector<std::shared_ptr<RemoteClient>> clients;
++		auto lock = m_clients.lock_shared_rec();
++		for(auto & ir : m_clients) {
++			auto c = ir.second;
++			if (c)
++				clients.emplace_back(c);
++		}
++		return clients;
++	}
+ 
+ private:
+ 	/* update internal player list */
+@@ -511,14 +551,14 @@
+ 
+ 	// Connection
+ 	con::Connection* m_con;
+-	Mutex m_clients_mutex;
++	//Mutex m_clients_mutex;
+ 	// Connected clients (behind the con mutex)
+-	std::map<u16, RemoteClient*> m_clients;
++	concurrent_map<u16, std::shared_ptr<RemoteClient>> m_clients;
+ 	std::vector<std::string> m_clients_names; //for announcing masterserver
+ 
+ 	// Environment
+ 	ServerEnvironment *m_env;
+-	Mutex m_env_mutex;
++	//Mutex m_env_mutex;
+ 
+ 	float m_print_info_timer;
+ 

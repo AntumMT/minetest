@@ -1,0 +1,162 @@
+diff -ruN minetest-master/src/itemdef.cpp minetest-freeminer/src/itemdef.cpp
+--- minetest-master/src/itemdef.cpp	2016-09-03 16:15:52.681779000 -0700
++++ minetest-freeminer/src/itemdef.cpp	2016-09-03 15:43:59.814740000 -0700
+@@ -1,25 +1,27 @@
+ /*
+-Minetest
++itemdef.cpp
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
+ Copyright (C) 2013 Kahrl <kahrl@gmx.net>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "itemdef.h"
+-
+ #include "gamedef.h"
+ #include "nodedef.h"
+ #include "tool.h"
+@@ -28,6 +30,8 @@
+ #include "mapblock_mesh.h"
+ #include "mesh.h"
+ #include "wieldmesh.h"
++//#include "mapblock.h"
++#include "clientmap.h"
+ #include "client/tile.h"
+ #endif
+ #include "log.h"
+@@ -42,6 +46,7 @@
+ #include <GLES/gl.h>
+ #endif
+ 
++
+ /*
+ 	ItemDefinition
+ */
+@@ -221,10 +226,69 @@
+ 	} catch(SerializationError &e) {};
+ }
+ 
++void ItemDefinition::msgpack_pack(msgpack::packer<msgpack::sbuffer> &pk) const
++{
++	pk.pack_map(tool_capabilities ? 15 : 14);
++	PACK(ITEMDEF_TYPE, (int)type);
++	PACK(ITEMDEF_NAME, name);
++	PACK(ITEMDEF_DESCRIPTION, description);
++	PACK(ITEMDEF_INVENTORY_IMAGE, inventory_image);
++	PACK(ITEMDEF_WIELD_IMAGE, wield_image);
++	PACK(ITEMDEF_WIELD_SCALE, wield_scale);
++	PACK(ITEMDEF_STACK_MAX, stack_max);
++	PACK(ITEMDEF_USABLE, usable);
++	PACK(ITEMDEF_LIQUIDS_POINTABLE, liquids_pointable);
++
++	if(tool_capabilities)
++		PACK(ITEMDEF_TOOL_CAPABILITIES, *tool_capabilities);
++
++	PACK(ITEMDEF_GROUPS, groups);
++	PACK(ITEMDEF_NODE_PLACEMENT_PREDICTION, node_placement_prediction);
++	PACK(ITEMDEF_SOUND_PLACE_NAME, sound_place.name);
++	PACK(ITEMDEF_SOUND_PLACE_GAIN, sound_place.gain);
++	PACK(ITEMDEF_RANGE, range);
++}
++
++void ItemDefinition::msgpack_unpack(msgpack::object o)
++{
++	// Reset everything
++	reset();
++
++	MsgpackPacket packet = o.as<MsgpackPacket>();
++	int type_tmp;
++	packet[ITEMDEF_TYPE].convert(type_tmp);
++	type = (ItemType)type_tmp;
++	packet[ITEMDEF_NAME].convert(name);
++	packet[ITEMDEF_DESCRIPTION].convert(description);
++	packet[ITEMDEF_INVENTORY_IMAGE].convert(inventory_image);
++	packet[ITEMDEF_WIELD_IMAGE].convert(wield_image);
++	packet[ITEMDEF_WIELD_SCALE].convert(wield_scale);
++	packet[ITEMDEF_STACK_MAX].convert(stack_max);
++	packet[ITEMDEF_USABLE].convert(usable);
++	packet[ITEMDEF_LIQUIDS_POINTABLE].convert(liquids_pointable);
++
++	if (packet.find(ITEMDEF_TOOL_CAPABILITIES) != packet.end()) {
++		delete tool_capabilities;
++		tool_capabilities = new ToolCapabilities;
++		packet[ITEMDEF_TOOL_CAPABILITIES].convert(*tool_capabilities);
++	}
++
++	packet[ITEMDEF_GROUPS].convert(groups);
++	packet[ITEMDEF_NODE_PLACEMENT_PREDICTION].convert(node_placement_prediction);
++	packet[ITEMDEF_SOUND_PLACE_NAME].convert(sound_place.name);
++	packet[ITEMDEF_SOUND_PLACE_GAIN].convert(sound_place.gain);
++	packet[ITEMDEF_RANGE].convert(range);
++}
++
+ /*
+ 	CItemDefManager
+ */
+ 
++enum {
++	ITEMDEFMANAGER_ITEMDEFS,
++	ITEMDEFMANAGER_ALIASES
++};
++
+ // SUGG: Support chains of aliases?
+ 
+ class CItemDefManager: public IWritableItemDefManager
+@@ -501,6 +565,33 @@
+ 			os << serializeString(it->second);
+ 		}
+ 	}
++
++
++	void msgpack_pack(msgpack::packer<msgpack::sbuffer> &pk) const {
++		pk.pack_map(2);
++		pk.pack((int)ITEMDEFMANAGER_ITEMDEFS);
++		pk.pack_map(m_item_definitions.size());
++		for (std::map<std::string, ItemDefinition*>::const_iterator i = m_item_definitions.begin();
++				i != m_item_definitions.end(); ++i) {
++			pk.pack(i->first);
++			pk.pack(*(i->second));
++		}
++		PACK(ITEMDEFMANAGER_ALIASES, m_aliases);
++	}
++	void msgpack_unpack(msgpack::object o) {
++		clear();
++		MsgpackPacket packet = o.as<MsgpackPacket>();
++
++		std::map<std::string, ItemDefinition> itemdefs_tmp;
++		packet[ITEMDEFMANAGER_ITEMDEFS].convert(itemdefs_tmp);
++		for (std::map<std::string, ItemDefinition>::iterator i = itemdefs_tmp.begin();
++				i != itemdefs_tmp.end(); ++i) {
++			registerItem(i->second);
++		}
++		packet[ITEMDEFMANAGER_ALIASES].convert(m_aliases);
++	}
++
++
+ 	void deSerialize(std::istream &is)
+ 	{
+ 		// Clear everything

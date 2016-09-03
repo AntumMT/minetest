@@ -1,0 +1,9 @@
+diff -ruN minetest-master/src/profiler.cpp minetest-freeminer/src/profiler.cpp
+--- minetest-master/src/profiler.cpp	2016-09-03 16:15:52.465778000 -0700
++++ minetest-freeminer/src/profiler.cpp	2016-09-03 15:43:59.858740000 -0700
+@@ -21,3 +21,5 @@
+ 
+ static Profiler main_profiler;
+ Profiler *g_profiler = &main_profiler;
++
++bool g_profiler_enabled;

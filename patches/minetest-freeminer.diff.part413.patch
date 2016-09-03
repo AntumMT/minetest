@@ -1,0 +1,22 @@
+diff -ruN minetest-master/src/porting_android.h minetest-freeminer/src/porting_android.h
+--- minetest-master/src/porting_android.h	2016-09-03 16:15:52.597779000 -0700
++++ minetest-freeminer/src/porting_android.h	2016-09-03 15:43:59.930741000 -0700
+@@ -36,6 +36,8 @@
+ /** java <-> c++ interaction interface **/
+ extern JNIEnv *jnienv;
+ 
++extern int android_version_sdk_int;
++
+ /**
+  * do initialization required on android only
+  */
+@@ -76,6 +78,9 @@
+  */
+ std::string getInputDialogValue();
+ 
++int canKeyboard();
++void displayKeyboard(bool pShow, android_app* mApplication, JNIEnv* lJNIEnv);
++
+ }
+ 
+ #endif

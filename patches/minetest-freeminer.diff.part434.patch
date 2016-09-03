@@ -1,0 +1,11 @@
+diff -ruN minetest-master/src/script/cpp_api/s_async.h minetest-freeminer/src/script/cpp_api/s_async.h
+--- minetest-master/src/script/cpp_api/s_async.h	2016-09-03 16:15:52.425778000 -0700
++++ minetest-freeminer/src/script/cpp_api/s_async.h	2016-09-03 15:43:59.838740000 -0700
+@@ -30,6 +30,7 @@
+ #include "debug.h"
+ #include "lua.h"
+ #include "cpp_api/s_base.h"
++//#include "threading/thread_pool.h"
+ 
+ // Forward declarations
+ class AsyncEngine;

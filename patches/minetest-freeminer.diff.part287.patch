@@ -1,0 +1,153 @@
+diff -ruN minetest-master/src/httpfetch.cpp minetest-freeminer/src/httpfetch.cpp
+--- minetest-master/src/httpfetch.cpp	2016-09-03 16:15:52.553779000 -0700
++++ minetest-freeminer/src/httpfetch.cpp	2016-09-03 15:43:59.650739000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++httpfetch.cpp
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "socket.h" // for select()
+@@ -38,7 +41,7 @@
+ 
+ Mutex g_httpfetch_mutex;
+ std::map<unsigned long, std::queue<HTTPFetchResult> > g_httpfetch_results;
+-PcgRandom g_callerid_randomness;
++std::unique_ptr<PcgRandom> g_callerid_randomness;
+ 
+ HTTPFetchRequest::HTTPFetchRequest()
+ {
+@@ -97,8 +100,8 @@
+ 	unsigned long caller;
+ 
+ 	do {
+-		caller = (((u64) g_callerid_randomness.next()) << 32) |
+-				g_callerid_randomness.next();
++		caller = (((u64) g_callerid_randomness->next()) << 32) |
++				g_callerid_randomness->next();
+ 
+ 		if (--tries < 1) {
+ 			FATAL_ERROR("httpfetch_caller_alloc_secure: ran out of caller IDs");
+@@ -149,6 +152,9 @@
+ 
+ #if USE_CURL
+ #include <curl/curl.h>
++#ifndef _WIN32
++#include <sys/utsname.h>
++#endif
+ 
+ /*
+ 	USE_CURL is on: use cURL based httpfetch implementation
+@@ -277,6 +283,17 @@
+ 
+ 	if (request.useragent != "")
+ 		curl_easy_setopt(curl, CURLOPT_USERAGENT, request.useragent.c_str());
++	else {
++		std::string useragent = std::string("Freeminer ") + g_version_hash;
++#ifdef _WIN32
++		useragent += "Windows";
++#else
++		struct utsname osinfo;
++		uname(&osinfo);
++		useragent += std::string(" (") + osinfo.sysname + "; " + osinfo.release + "; " + osinfo.machine + ")";
++#endif
++		curl_easy_setopt(curl, CURLOPT_USERAGENT, useragent.c_str());
++	}
+ 
+ 	// Set up a write callback that writes to the
+ 	// ostringstream ongoing->oss, unless the data
+@@ -292,9 +309,12 @@
+ 	}
+ 
+ 	// Set POST (or GET) data
++/*
+ 	if (request.post_fields.empty() && request.post_data.empty()) {
+ 		curl_easy_setopt(curl, CURLOPT_HTTPGET, 1);
+ 	} else if (request.multipart) {
++*/
++	if (request.multipart) {
+ 		curl_httppost *last = NULL;
+ 		for (StringMap::iterator it = request.post_fields.begin();
+ 				it != request.post_fields.end(); ++it) {
+@@ -308,7 +328,7 @@
+ 		curl_easy_setopt(curl, CURLOPT_HTTPPOST, post);
+ 		// request.post_fields must now *never* be
+ 		// modified until CURLOPT_HTTPPOST is cleared
+-	} else if (request.post_data.empty()) {
++	} else if (!request.post_fields.empty()) {
+ 		curl_easy_setopt(curl, CURLOPT_POST, 1);
+ 		std::string str;
+ 		for (StringMap::iterator it = request.post_fields.begin();
+@@ -323,7 +343,7 @@
+ 				str.size());
+ 		curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS,
+ 				str.c_str());
+-	} else {
++	} else if (!request.post_data.empty()) {
+ 		curl_easy_setopt(curl, CURLOPT_POST, 1);
+ 		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE,
+ 				request.post_data.size());
+@@ -331,6 +351,8 @@
+ 				request.post_data.c_str());
+ 		// request.post_data must now *never* be
+ 		// modified until CURLOPT_POSTFIELDS is cleared
++	} else {
++		curl_easy_setopt(curl, CURLOPT_HTTPGET, 1);
+ 	}
+ 	// Set additional HTTP headers
+ 	for (std::vector<std::string>::iterator it = request.extra_headers.begin();
+@@ -659,7 +681,8 @@
+ 		FATAL_ERROR_IF(!m_all_ongoing.empty(), "Expected empty");
+ 
+ 		while (!stopRequested()) {
+-			BEGIN_DEBUG_EXCEPTION_HANDLER
++			//BEGIN_DEBUG_EXCEPTION_HANDLER
++			EXCEPTION_HANDLER_BEGIN;
+ 
+ 			/*
+ 				Handle new async requests
+@@ -707,7 +730,8 @@
+ 			else
+ 				waitForIO(100);
+ 
+-			END_DEBUG_EXCEPTION_HANDLER
++			//END_DEBUG_EXCEPTION_HANDLER
++			EXCEPTION_HANDLER_END;
+ 		}
+ 
+ 		// Call curl_multi_remove_handle and cleanup easy handles
+@@ -744,7 +768,7 @@
+ 	// Initialize g_callerid_randomness for httpfetch_caller_alloc_secure
+ 	u64 randbuf[2];
+ 	porting::secure_rand_fill_buf(randbuf, sizeof(u64) * 2);
+-	g_callerid_randomness = PcgRandom(randbuf[0], randbuf[1]);
++	g_callerid_randomness.reset(new PcgRandom(randbuf[0], randbuf[1]));
+ }
+ 
+ void httpfetch_cleanup()

@@ -1,0 +1,25 @@
+diff -ruN minetest-master/src/wieldmesh.h minetest-freeminer/src/wieldmesh.h
+--- minetest-master/src/wieldmesh.h	2016-09-03 16:15:52.577779000 -0700
++++ minetest-freeminer/src/wieldmesh.h	2016-09-03 15:43:59.734739000 -0700
+@@ -60,7 +60,9 @@
+ 	void changeToMesh(scene::IMesh *mesh);
+ 
+ 	// Child scene node with the current wield mesh
++public:
+ 	scene::IMeshSceneNode *m_meshnode;
++private:
+ 	video::E_MATERIAL_TYPE m_material_type;
+ 
+ 	// True if EMF_LIGHTING should be enabled.
+Binary files minetest-master/textures/base/pack/background.png and minetest-freeminer/textures/base/pack/background.png differ
+Binary files minetest-master/textures/base/pack/blank.png and minetest-freeminer/textures/base/pack/blank.png differ
+Binary files minetest-master/textures/base/pack/menu.png and minetest-freeminer/textures/base/pack/menu.png differ
+Binary files minetest-master/textures/base/pack/moon.png and minetest-freeminer/textures/base/pack/moon.png differ
+Binary files minetest-master/textures/base/pack/moon_tonemap.png and minetest-freeminer/textures/base/pack/moon_tonemap.png differ
+Binary files minetest-master/textures/base/pack/selected.png and minetest-freeminer/textures/base/pack/selected.png differ
+Binary files minetest-master/textures/base/pack/server_flags_creative.png and minetest-freeminer/textures/base/pack/server_flags_creative.png differ
+Binary files minetest-master/textures/base/pack/server_flags_password.png and minetest-freeminer/textures/base/pack/server_flags_password.png differ
+Binary files minetest-master/textures/base/pack/server_flags_pvp.png and minetest-freeminer/textures/base/pack/server_flags_pvp.png differ
+Binary files minetest-master/textures/base/pack/shadow.png and minetest-freeminer/textures/base/pack/shadow.png differ
+Binary files minetest-master/textures/base/pack/sun.png and minetest-freeminer/textures/base/pack/sun.png differ
+Binary files minetest-master/textures/base/pack/sun_tonemap.png and minetest-freeminer/textures/base/pack/sun_tonemap.png differ

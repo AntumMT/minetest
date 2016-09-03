@@ -1,0 +1,920 @@
+diff -ruN minetest-master/src/nodedef.cpp minetest-freeminer/src/nodedef.cpp
+--- minetest-master/src/nodedef.cpp	2016-09-03 16:15:52.505778000 -0700
++++ minetest-freeminer/src/nodedef.cpp	2016-09-03 15:43:59.874740000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++nodedef.cpp
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "nodedef.h"
+@@ -30,6 +33,9 @@
+ #include "nameidmapping.h"
+ #include "util/numeric.h"
+ #include "util/serialize.h"
++//#include "profiler.h" // For TimeTaker
++#include "network/connection.h"
++#include "shader.h"
+ #include "exceptions.h"
+ #include "debug.h"
+ #include "gamedef.h"
+@@ -182,6 +188,68 @@
+ 	}
+ }
+ 
++void NodeBox::msgpack_pack(msgpack::packer<msgpack::sbuffer> &pk) const
++{
++	int map_size = 1;
++	if (type == NODEBOX_FIXED || type == NODEBOX_LEVELED)
++		map_size += 1;
++	else if (type == NODEBOX_WALLMOUNTED)
++		map_size += 3;
++	else if (type == NODEBOX_CONNECTED)
++		map_size += 7;
++
++	pk.pack_map(map_size);
++	PACK(NODEBOX_S_TYPE, (int)type);
++
++	if (type == NODEBOX_FIXED || type == NODEBOX_LEVELED || type == NODEBOX_CONNECTED)
++		PACK(NODEBOX_S_FIXED, fixed);
++
++	if (type == NODEBOX_WALLMOUNTED) {
++		PACK(NODEBOX_S_WALL_TOP, wall_top);
++		PACK(NODEBOX_S_WALL_BOTTOM, wall_bottom);
++		PACK(NODEBOX_S_WALL_SIDE, wall_side);
++	} else if (type == NODEBOX_CONNECTED) {
++		PACK(NODEBOX_S_CONNECTED_TOP, connect_top);       // 2
++		PACK(NODEBOX_S_CONNECTED_BOTTOM, connect_bottom); // 3
++		PACK(NODEBOX_S_CONNECTED_FRONT, connect_front);   // 4
++		PACK(NODEBOX_S_CONNECTED_LEFT, connect_left);     // 5
++		PACK(NODEBOX_S_CONNECTED_BACK, connect_back);     // 6
++		PACK(NODEBOX_S_CONNECTED_RIGHT, connect_right);   // 7
++	} else if (type != NODEBOX_REGULAR && type != NODEBOX_FIXED && type != NODEBOX_LEVELED){
++		warningstream<< "Unknown nodebox type = "<< (int)type << std::endl;
++	}
++}
++
++void NodeBox::msgpack_unpack(msgpack::object o)
++{
++	reset();
++
++	MsgpackPacket packet = o.as<MsgpackPacket>();
++
++	int type_tmp = packet[NODEBOX_S_TYPE].as<int>();
++	type = (NodeBoxType)type_tmp;
++
++	//if(type == NODEBOX_FIXED || type == NODEBOX_LEVELED)
++	if (packet.count(NODEBOX_S_FIXED))
++		packet[NODEBOX_S_FIXED].convert(fixed);
++
++	if (type == NODEBOX_WALLMOUNTED) {
++		packet[NODEBOX_S_WALL_TOP].convert(wall_top);
++		packet[NODEBOX_S_WALL_BOTTOM].convert(wall_bottom);
++		packet[NODEBOX_S_WALL_SIDE].convert(wall_side);
++	} else if(type == NODEBOX_CONNECTED) {
++		if (packet.count(NODEBOX_S_CONNECTED_TOP) && packet.count(NODEBOX_S_CONNECTED_RIGHT)) { //lite check
++			packet[NODEBOX_S_CONNECTED_TOP].convert(connect_top);       // 2
++			packet[NODEBOX_S_CONNECTED_BOTTOM].convert(connect_bottom); // 3
++			packet[NODEBOX_S_CONNECTED_FRONT].convert(connect_front);   // 4
++			packet[NODEBOX_S_CONNECTED_LEFT].convert(connect_left);     // 5
++			packet[NODEBOX_S_CONNECTED_BACK].convert(connect_back);     // 6
++			packet[NODEBOX_S_CONNECTED_RIGHT].convert(connect_right);   // 7
++		}
++	}
++
++}
++
+ /*
+ 	TileDef
+ */
+@@ -230,6 +298,35 @@
+ 		backface_culling = false;
+ }
+ 
++void TileDef::msgpack_pack(msgpack::packer<msgpack::sbuffer> &pk) const
++{
++	pk.pack_map(8);
++	PACK(TILEDEF_NAME, name);
++	PACK(TILEDEF_ANIMATION_TYPE, (int)animation.type);
++	PACK(TILEDEF_ANIMATION_ASPECT_W, animation.aspect_w);
++	PACK(TILEDEF_ANIMATION_ASPECT_H, animation.aspect_h);
++	PACK(TILEDEF_ANIMATION_LENGTH, animation.length);
++	PACK(TILEDEF_BACKFACE_CULLING, backface_culling);
++	PACK(TILEDEF_TILEABLE_VERTICAL, tileable_vertical);
++	PACK(TILEDEF_TILEABLE_HORIZONTAL, tileable_horizontal);
++}
++
++void TileDef::msgpack_unpack(msgpack::object o)
++{
++	MsgpackPacket packet = o.as<MsgpackPacket>();
++	packet[TILEDEF_NAME].convert(name);
++
++	int type_tmp;
++	packet[TILEDEF_ANIMATION_TYPE].convert(type_tmp);
++	animation.type = (TileAnimationType)type_tmp;
++
++	packet[TILEDEF_ANIMATION_ASPECT_W].convert(animation.aspect_w);
++	packet[TILEDEF_ANIMATION_ASPECT_H].convert(animation.aspect_h);
++	packet[TILEDEF_ANIMATION_LENGTH].convert(animation.length);
++	packet[TILEDEF_BACKFACE_CULLING].convert(backface_culling);
++	packet_convert_safe(packet, TILEDEF_TILEABLE_VERTICAL, tileable_vertical);
++	packet_convert_safe(packet, TILEDEF_TILEABLE_HORIZONTAL, tileable_horizontal);
++}
+ 
+ /*
+ 	SimpleSoundSpec serialization
+@@ -287,15 +384,17 @@
+ 	/*
+ 		Cached stuff
+ 	*/
+-#ifndef SERVER
++//#ifndef SERVER
+ 	solidness = 2;
+ 	visual_solidness = 0;
+ 	backface_culling = true;
+ 
+-#endif
++//#endif
+ 	has_on_construct = false;
+ 	has_on_destruct = false;
+ 	has_after_destruct = false;
++	has_on_activate = false;
++	has_on_deactivate = false;
+ 	/*
+ 		Actual data
+ 
+@@ -351,6 +450,27 @@
+ 	sound_footstep = SimpleSoundSpec();
+ 	sound_dig = SimpleSoundSpec("__group");
+ 	sound_dug = SimpleSoundSpec();
++
++
++//freeminer:
++	solidness_far = 0;
++
++	freeze = "";
++	melt = "";
++	is_circuit_element = false;
++	is_wire = false;
++	is_wire_connector = false;
++	for(int i = 0; i < 6; ++i)
++	{
++		wire_connections[i] = 0;
++	}
++	for(int i = 0; i < 64; ++i)
++	{
++		circuit_element_func[i] = 0;
++	}
++	circuit_element_delay = 0;
++
++
+ 	connects_to.clear();
+ 	connects_to_ids.clear();
+ 	connect_sides = 0;
+@@ -359,7 +479,7 @@
+ void ContentFeatures::serialize(std::ostream &os, u16 protocol_version) const
+ {
+ 	if(protocol_version < 24){
+-		serializeOld(os, protocol_version);
++		//serializeOld(os, protocol_version);
+ 		return;
+ 	}
+ 
+@@ -425,7 +545,7 @@
+ 	collision_box.serialize(os, protocol_version);
+ 	writeU8(os, floodable);
+ 	writeU16(os, connects_to_ids.size());
+-	for (std::set<content_t>::const_iterator i = connects_to_ids.begin();
++	for (auto i = connects_to_ids.begin();
+ 			i != connects_to_ids.end(); ++i)
+ 		writeU16(os, *i);
+ 	writeU8(os, connect_sides);
+@@ -435,12 +555,11 @@
+ {
+ 	int version = readU8(is);
+ 	if (version < 7) {
+-		deSerializeOld(is, version);
++		//deSerializeOld(is, version);
+ 		return;
+ 	} else if (version > 8) {
+ 		throw SerializationError("unsupported ContentFeatures version");
+ 	}
+-
+ 	name = deSerializeString(is);
+ 	groups.clear();
+ 	u32 groups_size = readU16(is);
+@@ -511,6 +630,138 @@
+ 	}catch(SerializationError &e) {};
+ }
+ 
++void ContentFeatures::msgpack_pack(msgpack::packer<msgpack::sbuffer> &pk) const
++{
++	pk.pack_map(40);
++	PACK(CONTENTFEATURES_NAME, name);
++	PACK(CONTENTFEATURES_GROUPS, groups);
++	PACK(CONTENTFEATURES_DRAWTYPE, (int)drawtype);
++	PACK(CONTENTFEATURES_VISUAL_SCALE, visual_scale);
++
++	pk.pack((int)CONTENTFEATURES_TILEDEF);
++	pk.pack_array(6);
++	for (size_t i = 0; i < 6; ++i)
++		pk.pack(tiledef[i]);
++
++	pk.pack((int)CONTENTFEATURES_TILEDEF_SPECIAL);
++	pk.pack_array(CF_SPECIAL_COUNT);
++	for (size_t i = 0; i < CF_SPECIAL_COUNT; ++i)
++		pk.pack(tiledef_special[i]);
++
++	PACK(CONTENTFEATURES_ALPHA, alpha);
++	PACK(CONTENTFEATURES_POST_EFFECT_COLOR, post_effect_color);
++	PACK(CONTENTFEATURES_PARAM_TYPE, (int)param_type);
++	PACK(CONTENTFEATURES_PARAM_TYPE_2, (int)param_type_2);
++	PACK(CONTENTFEATURES_IS_GROUND_CONTENT, is_ground_content);
++	PACK(CONTENTFEATURES_LIGHT_PROPAGATES, light_propagates);
++	PACK(CONTENTFEATURES_SUNLIGHT_PROPAGATES, sunlight_propagates);
++	PACK(CONTENTFEATURES_WALKABLE, walkable);
++	PACK(CONTENTFEATURES_POINTABLE, pointable);
++	PACK(CONTENTFEATURES_DIGGABLE, diggable);
++	PACK(CONTENTFEATURES_CLIMBABLE, climbable);
++	PACK(CONTENTFEATURES_BUILDABLE_TO, buildable_to);
++	PACK(CONTENTFEATURES_LIQUID_TYPE, (int)liquid_type);
++	PACK(CONTENTFEATURES_LIQUID_ALTERNATIVE_FLOWING, liquid_alternative_flowing);
++	PACK(CONTENTFEATURES_LIQUID_ALTERNATIVE_SOURCE, liquid_alternative_source);
++	PACK(CONTENTFEATURES_LIQUID_VISCOSITY, liquid_viscosity);
++	PACK(CONTENTFEATURES_LIQUID_RENEWABLE, liquid_renewable);
++	PACK(CONTENTFEATURES_LIGHT_SOURCE, light_source);
++	PACK(CONTENTFEATURES_DAMAGE_PER_SECOND, damage_per_second);
++	PACK(CONTENTFEATURES_NODE_BOX, node_box);
++	PACK(CONTENTFEATURES_SELECTION_BOX, selection_box);
++	PACK(CONTENTFEATURES_LEGACY_FACEDIR_SIMPLE, legacy_facedir_simple);
++	PACK(CONTENTFEATURES_LEGACY_WALLMOUNTED, legacy_wallmounted);
++	PACK(CONTENTFEATURES_SOUND_FOOTSTEP, sound_footstep);
++	PACK(CONTENTFEATURES_SOUND_DIG, sound_dig);
++	PACK(CONTENTFEATURES_SOUND_DUG, sound_dug);
++	PACK(CONTENTFEATURES_RIGHTCLICKABLE, rightclickable);
++	PACK(CONTENTFEATURES_DROWNING, drowning);
++	PACK(CONTENTFEATURES_LEVELED, leveled);
++	PACK(CONTENTFEATURES_WAVING, waving);
++	PACK(CONTENTFEATURES_MESH, mesh);
++	PACK(CONTENTFEATURES_COLLISION_BOX, collision_box);
++
++	// PACK(CONTENTFEATURES_FLOODABLE, floodable); //not used on client
++
++	PACK(CONTENTFEATURES_CONNECT_TO_IDS, connects_to_ids);
++	PACK(CONTENTFEATURES_CONNECT_SIDES, connect_sides);
++}
++
++void ContentFeatures::msgpack_unpack(msgpack::object o)
++{
++	MsgpackPacket packet = o.as<MsgpackPacket>();
++	packet[CONTENTFEATURES_NAME].convert(name);
++	groups.clear();
++	packet[CONTENTFEATURES_GROUPS].convert(groups);
++
++	int drawtype_tmp;
++	packet[CONTENTFEATURES_DRAWTYPE].convert(drawtype_tmp);
++	drawtype = (NodeDrawType)drawtype_tmp;
++
++	packet[CONTENTFEATURES_VISUAL_SCALE].convert(visual_scale);
++
++	std::vector<TileDef> tiledef_received;
++	packet[CONTENTFEATURES_TILEDEF].convert(tiledef_received);
++	if (tiledef_received.size() != 6)
++		throw SerializationError("unsupported tile count");
++	for(size_t i = 0; i < 6; ++i)
++		tiledef[i] = tiledef_received[i];
++
++	std::vector<TileDef> tiledef_special_received;
++	packet[CONTENTFEATURES_TILEDEF_SPECIAL].convert(tiledef_special_received);
++	if(tiledef_special_received.size() != CF_SPECIAL_COUNT)
++		throw SerializationError("unsupported CF_SPECIAL_COUNT");
++	for (size_t i = 0; i < CF_SPECIAL_COUNT; ++i)
++		tiledef_special[i] = tiledef_special_received[i];
++
++	packet[CONTENTFEATURES_ALPHA].convert(alpha);
++	packet[CONTENTFEATURES_POST_EFFECT_COLOR].convert(post_effect_color);
++
++	int param_type_tmp;
++	packet[CONTENTFEATURES_PARAM_TYPE].convert(param_type_tmp);
++	param_type = (ContentParamType)param_type_tmp;
++	packet[CONTENTFEATURES_PARAM_TYPE_2].convert(param_type_tmp);
++	param_type_2 = (ContentParamType2)param_type_tmp;
++
++	packet[CONTENTFEATURES_IS_GROUND_CONTENT].convert(is_ground_content);
++	packet[CONTENTFEATURES_LIGHT_PROPAGATES].convert(light_propagates);
++	packet[CONTENTFEATURES_SUNLIGHT_PROPAGATES].convert(sunlight_propagates);
++	packet[CONTENTFEATURES_WALKABLE].convert(walkable);
++	packet[CONTENTFEATURES_POINTABLE].convert(pointable);
++	packet[CONTENTFEATURES_DIGGABLE].convert(diggable);
++	packet[CONTENTFEATURES_CLIMBABLE].convert(climbable);
++	packet[CONTENTFEATURES_BUILDABLE_TO].convert(buildable_to);
++
++	int liquid_type_tmp;
++	packet[CONTENTFEATURES_LIQUID_TYPE].convert(liquid_type_tmp);
++	liquid_type = (LiquidType)liquid_type_tmp;
++
++	packet[CONTENTFEATURES_LIQUID_ALTERNATIVE_FLOWING].convert(liquid_alternative_flowing);
++	packet[CONTENTFEATURES_LIQUID_ALTERNATIVE_SOURCE].convert(liquid_alternative_source);
++	packet[CONTENTFEATURES_LIQUID_VISCOSITY].convert(liquid_viscosity);
++	packet[CONTENTFEATURES_LIGHT_SOURCE].convert(light_source);
++	packet[CONTENTFEATURES_DAMAGE_PER_SECOND].convert(damage_per_second);
++	packet[CONTENTFEATURES_NODE_BOX].convert(node_box);
++	packet[CONTENTFEATURES_SELECTION_BOX].convert(selection_box);
++	packet[CONTENTFEATURES_LEGACY_FACEDIR_SIMPLE].convert(legacy_facedir_simple);
++	packet[CONTENTFEATURES_LEGACY_WALLMOUNTED].convert(legacy_wallmounted);
++	packet[CONTENTFEATURES_SOUND_FOOTSTEP].convert(sound_footstep);
++	packet[CONTENTFEATURES_SOUND_DIG].convert(sound_dig);
++	packet[CONTENTFEATURES_SOUND_DUG].convert(sound_dug);
++	packet[CONTENTFEATURES_RIGHTCLICKABLE].convert(rightclickable);
++	packet[CONTENTFEATURES_DROWNING].convert(drowning);
++	packet[CONTENTFEATURES_LEVELED].convert(leveled);
++	packet[CONTENTFEATURES_WAVING].convert(waving);
++	packet[CONTENTFEATURES_MESH].convert(mesh);
++	packet[CONTENTFEATURES_COLLISION_BOX].convert(collision_box);
++
++	if(packet.count(CONTENTFEATURES_CONNECT_TO_IDS))
++		packet[CONTENTFEATURES_CONNECT_TO_IDS].convert(connects_to_ids);
++	if(packet.count(CONTENTFEATURES_CONNECT_SIDES))
++		packet[CONTENTFEATURES_CONNECT_SIDES].convert(connect_sides);
++
++}
++
+ #ifndef SERVER
+ void ContentFeatures::fillTileAttribs(ITextureSource *tsrc, TileSpec *tile,
+ 		TileDef *tiledef, u32 shader_id, bool use_normal_texture,
+@@ -544,9 +795,9 @@
+ 		// Get texture size to determine frame count by aspect ratio
+ 		v2u32 size = tile->texture->getOriginalSize();
+ 		int frame_height = (float)size.X /
+-				(float)tiledef->animation.aspect_w *
+-				(float)tiledef->animation.aspect_h;
+-		frame_count = size.Y / frame_height;
++				(tiledef->animation.aspect_w ? (float)tiledef->animation.aspect_w : 1) *
++				(tiledef->animation.aspect_h ? (float)tiledef->animation.aspect_h : 1);
++		frame_count = size.Y / (frame_height ? frame_height : size.Y ? size.Y : 1);
+ 		int frame_length_ms = 1000.0 * tiledef->animation.length / frame_count;
+ 		tile->animation_frame_count = frame_count;
+ 		tile->animation_frame_length_ms = frame_length_ms;
+@@ -576,14 +827,21 @@
+ }
+ #endif
+ 
++/*
+ #ifndef SERVER
++*/
+ void ContentFeatures::updateTextures(ITextureSource *tsrc, IShaderSource *shdsrc,
+ 	scene::ISceneManager *smgr, scene::IMeshManipulator *meshmanip,
+-	IGameDef *gamedef, const TextureSettings &tsettings)
++	IGameDef *gamedef, const TextureSettings &tsettings,
++	bool server
++	)
+ {
++#ifndef SERVER
+ 	// minimap pixel color - the average color of a texture
++	if (tsrc)
+ 	if (tsettings.enable_minimap && tiledef[0].name != "")
+ 		minimap_color = tsrc->getTextureAverageColor(tiledef[0].name);
++#endif
+ 
+ 	// Figure out the actual tiles to use
+ 	TileDef tdef[6];
+@@ -608,14 +866,14 @@
+ 		solidness = 0;
+ 		break;
+ 	case NDT_LIQUID:
+-		assert(liquid_type == LIQUID_SOURCE);
++		//assert(liquid_type == LIQUID_SOURCE);
+ 		if (tsettings.opaque_water)
+ 			alpha = 255;
+ 		solidness = 1;
+ 		is_liquid = true;
+ 		break;
+ 	case NDT_FLOWINGLIQUID:
+-		assert(liquid_type == LIQUID_FLOWING);
++		//assert(liquid_type == LIQUID_FLOWING);
+ 		solidness = 0;
+ 		if (tsettings.opaque_water)
+ 			alpha = 255;
+@@ -632,6 +890,7 @@
+ 	case NDT_GLASSLIKE_FRAMED_OPTIONAL:
+ 		solidness = 0;
+ 		visual_solidness = 1;
++		if (!server)
+ 		drawtype = tsettings.connected_glass ? NDT_GLASSLIKE_FRAMED : NDT_GLASSLIKE;
+ 		break;
+ 	case NDT_ALLFACES:
+@@ -640,6 +899,7 @@
+ 		break;
+ 	case NDT_ALLFACES_OPTIONAL:
+ 		if (tsettings.leaves_style == LEAVES_FANCY) {
++			if (!server)
+ 			drawtype = NDT_ALLFACES;
+ 			solidness = 0;
+ 			visual_solidness = 1;
+@@ -648,10 +908,12 @@
+ 				if (tiledef_special[j].name != "")
+ 					tdef[j].name = tiledef_special[j].name;
+ 			}
++			if (!server)
+ 			drawtype = NDT_GLASSLIKE;
+ 			solidness = 0;
+ 			visual_solidness = 1;
+ 		} else {
++			if (!server)
+ 			drawtype = NDT_NORMAL;
+ 			solidness = 2;
+ 			for (u32 i = 0; i < 6; i++)
+@@ -659,6 +921,7 @@
+ 		}
+ 		if (waving == 1)
+ 			material_type = TILE_MATERIAL_WAVING_LEAVES;
++		solidness_far = 1;
+ 		break;
+ 	case NDT_PLANTLIKE:
+ 		solidness = 0;
+@@ -680,6 +943,10 @@
+ 		break;
+ 	}
+ 
++	if (drawtype == NDT_NODEBOX)
++		solidness_far = 1;
++
++#ifndef SERVER
+ 	if (is_liquid) {
+ 		material_type = (alpha == 255) ?
+ 			TILE_MATERIAL_LIQUID_OPAQUE : TILE_MATERIAL_LIQUID_TRANSPARENT;
+@@ -688,6 +955,7 @@
+ 	}
+ 
+ 	u32 tile_shader[6];
++	if (shdsrc) {
+ 	for (u16 j = 0; j < 6; j++) {
+ 		tile_shader[j] = shdsrc->getShader("nodes_shader",
+ 			material_type, drawtype);
+@@ -697,7 +965,9 @@
+ 		tile_shader[0] = shdsrc->getShader("water_surface_shader",
+ 			material_type, drawtype);
+ 	}
++	}
+ 
++	if (tsrc) {
+ 	// Tiles (fill in f->tiles[])
+ 	for (u16 j = 0; j < 6; j++) {
+ 		fillTileAttribs(tsrc, &tiles[j], &tdef[j], tile_shader[j],
+@@ -711,8 +981,10 @@
+ 			tile_shader[j], tsettings.use_normal_texture,
+ 			tiledef_special[j].backface_culling, alpha, material_type);
+ 	}
++	}
+ 
+ 	if ((drawtype == NDT_MESH) && (mesh != "")) {
++	  if (gamedef) {
+ 		// Meshnode drawtype
+ 		// Read the mesh and apply scale
+ 		mesh_ptr[0] = gamedef->getMesh(mesh);
+@@ -722,12 +994,14 @@
+ 			recalculateBoundingBox(mesh_ptr[0]);
+ 			meshmanip->recalculateNormals(mesh_ptr[0], true, false);
+ 		}
++	  }
+ 	} else if ((drawtype == NDT_NODEBOX) &&
+ 			((node_box.type == NODEBOX_REGULAR) ||
+ 			(node_box.type == NODEBOX_FIXED)) &&
+ 			(!node_box.fixed.empty())) {
+ 		//Convert regular nodebox nodes to meshnodes
+ 		//Change the drawtype and apply scale
++		if (!server)
+ 		drawtype = NDT_MESH;
+ 		mesh_ptr[0] = convertNodeboxesToMesh(node_box.fixed);
+ 		v3f scale = v3f(1.0, 1.0, 1.0) * visual_scale;
+@@ -756,8 +1030,11 @@
+ 		recalculateBoundingBox(mesh_ptr[0]);
+ 		meshmanip->recalculateNormals(mesh_ptr[0], true, false);
+ 	}
++#endif
+ }
++/*
+ #endif
++*/
+ 
+ /*
+ 	CNodeDefManager
+@@ -773,7 +1050,8 @@
+ 	inline virtual const ContentFeatures& get(const MapNode &n) const;
+ 	virtual bool getId(const std::string &name, content_t &result) const;
+ 	virtual content_t getId(const std::string &name) const;
+-	virtual bool getIds(const std::string &name, std::set<content_t> &result) const;
++	virtual bool getIds(const std::string &name, FMBitset &result) const;
++	virtual bool getIds(const std::string &name, std::unordered_set<content_t> &result) const;
+ 	virtual const ContentFeatures& get(const std::string &name) const;
+ 	content_t allocateId();
+ 	virtual content_t set(const std::string &name, const ContentFeatures &def);
+@@ -785,6 +1063,8 @@
+ 		void *progress_cbk_args);
+ 	void serialize(std::ostream &os, u16 protocol_version) const;
+ 	void deSerialize(std::istream &is);
++	void msgpack_pack(msgpack::packer<msgpack::sbuffer> &pk) const;
++	void msgpack_unpack(msgpack::object o);
+ 
+ 	inline virtual bool getNodeRegistrationStatus() const;
+ 	inline virtual void setNodeRegistrationStatus(bool completed);
+@@ -887,6 +1167,9 @@
+ 		f.buildable_to        = true;
+ 		f.floodable           = true;
+ 		f.is_ground_content   = true;
++#ifndef SERVER
++		f.minimap_color = video::SColor(0,0,0,0);
++#endif
+ 		// Insert directly into containers
+ 		content_t c = CONTENT_AIR;
+ 		m_content_features[c] = f;
+@@ -906,10 +1189,16 @@
+ 		f.diggable            = false;
+ 		f.buildable_to        = true; // A way to remove accidental CONTENT_IGNOREs
+ 		f.is_ground_content   = true;
++#ifndef SERVER
++		f.minimap_color = video::SColor(0,0,0,0);
++#endif
+ 		// Insert directly into containers
+ 		content_t c = CONTENT_IGNORE;
+ 		m_content_features[c] = f;
+ 		addNameIdMapping(c, f.name);
++		// mtproto: 0 must be ignore always
++		if (c)
++			m_content_features[0] = f;
+ 	}
+ }
+ 
+@@ -955,7 +1244,7 @@
+ 
+ 
+ bool CNodeDefManager::getIds(const std::string &name,
+-		std::set<content_t> &result) const
++		std::unordered_set<content_t> &result) const
+ {
+ 	//TimeTaker t("getIds", NULL, PRECISION_MICRO);
+ 	if (name.substr(0,6) != "group:") {
+@@ -982,6 +1271,30 @@
+ 	return true;
+ }
+ 
++	bool CNodeDefManager::getIds(const std::string &name, FMBitset &result) const {
++		if(name.substr(0,6) != "group:"){
++			content_t id = CONTENT_IGNORE;
++			bool exists = getId(name, id);
++			if (exists)
++				result.set(id, true);
++			return exists;
++		}
++		std::string group = name.substr(6);
++
++		std::map<std::string, GroupItems>::const_iterator
++			i = m_group_to_items.find(group);
++		if (i == m_group_to_items.end())
++			return true;
++
++		const GroupItems &items = i->second;
++		for (GroupItems::const_iterator j = items.begin();
++			j != items.end(); ++j) {
++			if ((*j).second != 0)
++				result.set((*j).first, true);
++		}
++		return true;
++	}
++
+ 
+ const ContentFeatures& CNodeDefManager::get(const std::string &name) const
+ {
+@@ -1016,8 +1329,10 @@
+ content_t CNodeDefManager::set(const std::string &name, const ContentFeatures &def)
+ {
+ 	// Pre-conditions
+-	assert(name != "");
+-	assert(name == def.name);
++	if (name == "")
++		return CONTENT_IGNORE;
++	if (name != def.name)
++		return CONTENT_IGNORE;
+ 
+ 	// Don't allow redefining ignore (but allow air and unknown)
+ 	if (name == "ignore") {
+@@ -1035,7 +1350,8 @@
+ 				"limit reached" << std::endl;
+ 			return CONTENT_IGNORE;
+ 		}
+-		assert(id != CONTENT_IGNORE);
++		if (id == CONTENT_IGNORE)
++			return CONTENT_IGNORE;
+ 		addNameIdMapping(id, name);
+ 	}
+ 	m_content_features[id] = def;
+@@ -1065,7 +1381,8 @@
+ 
+ content_t CNodeDefManager::allocateDummy(const std::string &name)
+ {
+-	assert(name != "");	// Pre-condition
++	if (name == "")
++		return CONTENT_IGNORE;
+ 	ContentFeatures f;
+ 	f.name = name;
+ 	return set(name, f);
+@@ -1151,25 +1468,28 @@
+ 	void (*progress_callback)(void *progress_args, u32 progress, u32 max_progress),
+ 	void *progress_callback_args)
+ {
+-#ifndef SERVER
+ 	infostream << "CNodeDefManager::updateTextures(): Updating "
+ 		"textures in node definitions" << std::endl;
+-	ITextureSource *tsrc = gamedef->tsrc();
+-	IShaderSource *shdsrc = gamedef->getShaderSource();
+-	scene::ISceneManager* smgr = gamedef->getSceneManager();
+-	scene::IMeshManipulator* meshmanip = smgr->getMeshManipulator();
++	bool server = !progress_callback;
++
++	ITextureSource *tsrc = !gamedef ? nullptr : gamedef->tsrc();
++	IShaderSource *shdsrc = !gamedef ? nullptr : gamedef->getShaderSource();
++	scene::ISceneManager* smgr = !gamedef ? nullptr : gamedef->getSceneManager();
++	scene::IMeshManipulator* meshmanip = !smgr ? nullptr : smgr->getMeshManipulator();
+ 	TextureSettings tsettings;
+ 	tsettings.readSettings();
+ 
+ 	u32 size = m_content_features.size();
+ 
+ 	for (u32 i = 0; i < size; i++) {
+-		m_content_features[i].updateTextures(tsrc, shdsrc, smgr, meshmanip, gamedef, tsettings);
++		m_content_features[i].updateTextures(tsrc, shdsrc, smgr, meshmanip, gamedef, tsettings, server);
++		if (progress_callback)
+ 		progress_callback(progress_callback_args, i, size);
+ 	}
+-#endif
+ }
+ 
++
++
+ void CNodeDefManager::serialize(std::ostream &os, u16 protocol_version) const
+ {
+ 	writeU8(os, 1); // version
+@@ -1245,6 +1565,61 @@
+ 	}
+ }
+ 
++// map of content features, key = id, value = ContentFeatures
++void CNodeDefManager::msgpack_pack(msgpack::packer<msgpack::sbuffer> &pk) const
++{
++	std::vector<std::pair<int, const ContentFeatures*> > features_to_pack;
++	for (size_t i = 0; i < m_content_features.size(); ++i) {
++		if (i == CONTENT_IGNORE || i == CONTENT_AIR || i == CONTENT_UNKNOWN || m_content_features[i].name == "")
++			continue;
++		features_to_pack.push_back(std::make_pair(i, &m_content_features[i]));
++	}
++	pk.pack_map(features_to_pack.size());
++	for (size_t i = 0; i < features_to_pack.size(); ++i)
++		PACK(features_to_pack[i].first, *features_to_pack[i].second);
++}
++void CNodeDefManager::msgpack_unpack(msgpack::object o)
++{
++	clear();
++
++	std::map<int, ContentFeatures> unpacked_features;
++	o.convert(unpacked_features);
++
++	for (std::map<int, ContentFeatures>::iterator it = unpacked_features.begin();
++			it != unpacked_features.end(); ++it) {
++		unsigned int i = it->first;
++		ContentFeatures f = it->second;
++
++		if(i == CONTENT_IGNORE || i == CONTENT_AIR
++				|| i == CONTENT_UNKNOWN){
++			infostream<<"NodeDefManager::deSerialize(): WARNING: "
++				<<"not changing builtin node "<<i
++				<<std::endl;
++			continue;
++		}
++		if(f.name == ""){
++			infostream<<"NodeDefManager::deSerialize(): WARNING: "
++				<<"received empty name"<<std::endl;
++			continue;
++		}
++		u16 existing_id;
++		bool found = m_name_id_mapping.getId(f.name, existing_id);  // ignore aliases
++		if(found && i != existing_id){
++			infostream<<"NodeDefManager::deSerialize(): WARNING: "
++				<<"already defined with different ID: "
++				<<f.name<<std::endl;
++			continue;
++		}
++
++		// All is ok, add node definition with the requested ID
++		if(i >= m_content_features.size())
++			m_content_features.resize((u32)(i) + 1);
++		m_content_features[i] = f;
++		addNameIdMapping(i, f.name);
++		verbosestream<<"deserialized "<<f.name<<std::endl;
++	}
++}
++
+ 
+ void CNodeDefManager::addNameIdMapping(content_t i, std::string name)
+ {
+@@ -1258,118 +1633,8 @@
+ 	return new CNodeDefManager();
+ }
+ 
+-
+-//// Serialization of old ContentFeatures formats
+-void ContentFeatures::serializeOld(std::ostream &os, u16 protocol_version) const
+-{
+-	if (protocol_version == 13)
+-	{
+-		writeU8(os, 5); // version
+-		os<<serializeString(name);
+-		writeU16(os, groups.size());
+-		for (ItemGroupList::const_iterator
+-				i = groups.begin(); i != groups.end(); ++i) {
+-			os<<serializeString(i->first);
+-			writeS16(os, i->second);
+-		}
+-		writeU8(os, drawtype);
+-		writeF1000(os, visual_scale);
+-		writeU8(os, 6);
+-		for (u32 i = 0; i < 6; i++)
+-			tiledef[i].serialize(os, protocol_version);
+-		//CF_SPECIAL_COUNT = 2 before cf ver. 7 and protocol ver. 24
+-		writeU8(os, 2);
+-		for (u32 i = 0; i < 2; i++)
+-			tiledef_special[i].serialize(os, protocol_version);
+-		writeU8(os, alpha);
+-		writeU8(os, post_effect_color.getAlpha());
+-		writeU8(os, post_effect_color.getRed());
+-		writeU8(os, post_effect_color.getGreen());
+-		writeU8(os, post_effect_color.getBlue());
+-		writeU8(os, param_type);
+-		writeU8(os, param_type_2);
+-		writeU8(os, is_ground_content);
+-		writeU8(os, light_propagates);
+-		writeU8(os, sunlight_propagates);
+-		writeU8(os, walkable);
+-		writeU8(os, pointable);
+-		writeU8(os, diggable);
+-		writeU8(os, climbable);
+-		writeU8(os, buildable_to);
+-		os<<serializeString(""); // legacy: used to be metadata_name
+-		writeU8(os, liquid_type);
+-		os<<serializeString(liquid_alternative_flowing);
+-		os<<serializeString(liquid_alternative_source);
+-		writeU8(os, liquid_viscosity);
+-		writeU8(os, light_source);
+-		writeU32(os, damage_per_second);
+-		node_box.serialize(os, protocol_version);
+-		selection_box.serialize(os, protocol_version);
+-		writeU8(os, legacy_facedir_simple);
+-		writeU8(os, legacy_wallmounted);
+-		serializeSimpleSoundSpec(sound_footstep, os);
+-		serializeSimpleSoundSpec(sound_dig, os);
+-		serializeSimpleSoundSpec(sound_dug, os);
+-	}
+-	else if (protocol_version > 13 && protocol_version < 24) {
+-		writeU8(os, 6); // version
+-		os<<serializeString(name);
+-		writeU16(os, groups.size());
+-		for (ItemGroupList::const_iterator
+-			i = groups.begin(); i != groups.end(); ++i) {
+-				os<<serializeString(i->first);
+-				writeS16(os, i->second);
+-		}
+-		writeU8(os, drawtype);
+-		writeF1000(os, visual_scale);
+-		writeU8(os, 6);
+-		for (u32 i = 0; i < 6; i++)
+-			tiledef[i].serialize(os, protocol_version);
+-		//CF_SPECIAL_COUNT = 2 before cf ver. 7 and protocol ver. 24
+-		writeU8(os, 2);
+-		for (u32 i = 0; i < 2; i++)
+-			tiledef_special[i].serialize(os, protocol_version);
+-		writeU8(os, alpha);
+-		writeU8(os, post_effect_color.getAlpha());
+-		writeU8(os, post_effect_color.getRed());
+-		writeU8(os, post_effect_color.getGreen());
+-		writeU8(os, post_effect_color.getBlue());
+-		writeU8(os, param_type);
+-		writeU8(os, param_type_2);
+-		writeU8(os, is_ground_content);
+-		writeU8(os, light_propagates);
+-		writeU8(os, sunlight_propagates);
+-		writeU8(os, walkable);
+-		writeU8(os, pointable);
+-		writeU8(os, diggable);
+-		writeU8(os, climbable);
+-		writeU8(os, buildable_to);
+-		os<<serializeString(""); // legacy: used to be metadata_name
+-		writeU8(os, liquid_type);
+-		os<<serializeString(liquid_alternative_flowing);
+-		os<<serializeString(liquid_alternative_source);
+-		writeU8(os, liquid_viscosity);
+-		writeU8(os, liquid_renewable);
+-		writeU8(os, light_source);
+-		writeU32(os, damage_per_second);
+-		node_box.serialize(os, protocol_version);
+-		selection_box.serialize(os, protocol_version);
+-		writeU8(os, legacy_facedir_simple);
+-		writeU8(os, legacy_wallmounted);
+-		serializeSimpleSoundSpec(sound_footstep, os);
+-		serializeSimpleSoundSpec(sound_dig, os);
+-		serializeSimpleSoundSpec(sound_dug, os);
+-		writeU8(os, rightclickable);
+-		writeU8(os, drowning);
+-		writeU8(os, leveled);
+-		writeU8(os, liquid_range);
+-	} else
+-		throw SerializationError("ContentFeatures::serialize(): "
+-			"Unsupported version requested");
+-}
+-
++#if 0
+ void ContentFeatures::deSerializeOld(std::istream &is, int version)
+-{
+ 	if (version == 5) // In PROTOCOL_VERSION 13
+ 	{
+ 		name = deSerializeString(is);
+@@ -1478,7 +1743,7 @@
+ 		throw SerializationError("unsupported ContentFeatures version");
+ 	}
+ }
+-
++#endif
+ 
+ inline bool CNodeDefManager::getNodeRegistrationStatus() const
+ {
+@@ -1643,7 +1908,7 @@
+ 	}
+ 
+ 	if (!success) {
+-		errorstream << "NodeResolver: failed to resolve node name '" << name
++		infostream << "NodeResolver: failed to resolve node name '" << name
+ 			<< "'." << std::endl;
+ 		c = c_fallback;
+ 	}
+@@ -1659,7 +1924,7 @@
+ 	bool success = true;
+ 
+ 	if (m_nnlistsizes_idx == m_nnlistsizes.size()) {
+-		errorstream << "NodeResolver: no more node lists" << std::endl;
++		infostream << "NodeResolver: no more node lists" << std::endl;
+ 		return false;
+ 	}
+ 
+@@ -1667,7 +1932,7 @@
+ 
+ 	while (length--) {
+ 		if (m_nodenames_idx == m_nodenames.size()) {
+-			errorstream << "NodeResolver: no more nodes in list" << std::endl;
++			infostream << "NodeResolver: no more nodes in list" << std::endl;
+ 			return false;
+ 		}
+ 
+@@ -1678,16 +1943,15 @@
+ 			if (m_ndef->getId(name, c)) {
+ 				result_out->push_back(c);
+ 			} else if (all_required) {
+-				errorstream << "NodeResolver: failed to resolve node name '"
++				infostream << "NodeResolver: failed to resolve node name '"
+ 					<< name << "'." << std::endl;
+ 				result_out->push_back(c_fallback);
+ 				success = false;
+ 			}
+ 		} else {
+-			std::set<content_t> cids;
+-			std::set<content_t>::iterator it;
++			std::unordered_set<content_t> cids;
+ 			m_ndef->getIds(name, cids);
+-			for (it = cids.begin(); it != cids.end(); ++it)
++			for (auto it = cids.begin(); it != cids.end(); ++it)
+ 				result_out->push_back(*it);
+ 		}
+ 	}

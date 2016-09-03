@@ -1,0 +1,129 @@
+diff -ruN minetest-master/src/serverobject.h minetest-freeminer/src/serverobject.h
+--- minetest-master/src/serverobject.h	2016-09-03 16:15:52.629779000 -0700
++++ minetest-freeminer/src/serverobject.h	2016-09-03 15:43:59.958741000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++serverobject.h
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #ifndef SERVEROBJECT_HEADER
+@@ -25,6 +28,7 @@
+ #include "inventorymanager.h"
+ #include "itemgroup.h"
+ #include "util/container.h"
++#include "threading/lock.h"
+ 
+ /*
+ 
+@@ -49,6 +53,7 @@
+ struct ObjectProperties;
+ 
+ class ServerActiveObject : public ActiveObject
++, public locker<>
+ {
+ public:
+ 	/*
+@@ -78,8 +83,14 @@
+ 	/*
+ 		Some simple getters/setters
+ 	*/
+-	v3f getBasePosition(){ return m_base_position; }
+-	void setBasePosition(v3f pos){ m_base_position = pos; }
++	v3f getBasePosition() {
++		std::lock_guard<Mutex> lock(m_base_position_mutex);
++		return m_base_position;
++	}
++	void setBasePosition(v3f pos) {
++		std::lock_guard<Mutex> lock(m_base_position_mutex);
++		m_base_position = pos;
++	}
+ 	ServerEnvironment* getEnv(){ return m_env; }
+ 	
+ 	/*
+@@ -187,7 +198,7 @@
+ 	{ return ""; }
+ 	virtual int getWieldIndex() const
+ 	{ return 0; }
+-	virtual ItemStack getWieldedItem() const;
++	virtual ItemStack getWieldedItem();
+ 	virtual bool setWieldedItem(const ItemStack &item);
+ 
+ 	/*
+@@ -195,7 +206,7 @@
+ 		deleted until this is 0 to keep the id preserved for the right
+ 		object.
+ 	*/
+-	u16 m_known_by_count;
++	std::atomic_ushort m_known_by_count;
+ 
+ 	/*
+ 		- Whether this object is to be removed when nobody knows about
+@@ -206,7 +217,7 @@
+ 		  to be deleted.
+ 		- This can be set to true by anything else too.
+ 	*/
+-	bool m_removed;
++	std::atomic_bool m_removed;
+ 	
+ 	/*
+ 		This is set to true when an object should be removed from the active
+@@ -217,12 +228,12 @@
+ 		m_known_by_count is true, object is deleted from the active object
+ 		list.
+ 	*/
+-	bool m_pending_deactivation;
++	std::atomic_bool m_pending_deactivation;
+ 	
+ 	/*
+ 		Whether the object's static data has been stored to a block
+ 	*/
+-	bool m_static_exists;
++	std::atomic_bool m_static_exists;
+ 	/*
+ 		The block from which the object was loaded from, and in which
+ 		a copy of the static data resides.
+@@ -232,7 +243,8 @@
+ 	/*
+ 		Queue of messages to be sent to the client
+ 	*/
+-	std::queue<ActiveObjectMessage> m_messages_out;
++	Queue<ActiveObjectMessage> & m_messages_out;
++	float m_uptime_last;
+ 	
+ protected:
+ 	// Used for creating objects based on type
+@@ -243,6 +255,7 @@
+ 
+ 	ServerEnvironment *m_env;
+ 	v3f m_base_position;
++	Mutex m_base_position_mutex;
+ 
+ private:
+ 	// Used for creating objects based on type

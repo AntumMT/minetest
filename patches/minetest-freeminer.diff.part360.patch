@@ -1,0 +1,19 @@
+diff -ruN minetest-master/src/mapsector.cpp minetest-freeminer/src/mapsector.cpp
+--- minetest-master/src/mapsector.cpp	2016-09-03 16:15:52.689779000 -0700
++++ minetest-freeminer/src/mapsector.cpp	2016-09-03 15:43:59.818740000 -0700
+@@ -17,6 +17,9 @@
+ 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+ 
++//not used minetest shit
++#if 0
++
+ #include "mapsector.h"
+ #include "exceptions.h"
+ #include "mapblock.h"
+@@ -260,3 +263,5 @@
+ #endif // !SERVER
+ 
+ //END
++
++#endif

@@ -1,0 +1,161 @@
+diff -ruN minetest-master/src/porting.h minetest-freeminer/src/porting.h
+--- minetest-master/src/porting.h	2016-09-03 16:15:52.577779000 -0700
++++ minetest-freeminer/src/porting.h	2016-09-03 15:43:59.738740000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++porting.h
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ /*
+@@ -41,6 +44,7 @@
+ #include "constants.h"
+ #include "gettime.h"
+ #include "threads.h"
++#include <atomic>
+ 
+ #ifdef _MSC_VER
+ 	#define SWPRINTF_CHARSTRING L"%S"
+@@ -56,6 +60,8 @@
+ 	#include <windows.h>
+ 
+ 	#define sleep_ms(x) Sleep(x)
++
++	#define MAX_PACKET_SIZE_SINGLEPLAYER 1400
+ #else
+ 	#include <unistd.h>
+ 	#include <stdint.h> //for uintptr_t
+@@ -69,6 +75,8 @@
+ 	#endif
+ 
+ 	#define sleep_ms(x) usleep(x*1000)
++
++	#define MAX_PACKET_SIZE_SINGLEPLAYER 8192
+ #endif
+ 
+ #ifdef _MSC_VER
+@@ -133,6 +141,7 @@
+ // When the bool is true, program should quit.
+ bool * signal_handler_killstatus(void);
+ 
++extern std::atomic_bool g_sighup, g_siginfo;
+ /*
+ 	Path of static data directory.
+ */
+@@ -307,9 +316,83 @@
+ 	}
+ }
+ 
++#if defined(linux) || defined(__linux)
++	#include <sys/prctl.h>
++
++	inline void setThreadName(const char *name) {
++		/* It would be cleaner to do this with pthread_setname_np,
++		 * which was added to glibc in version 2.12, but some major
++		 * distributions are still runing 2.11 and previous versions.
++		 */
++		prctl(PR_SET_NAME, name);
++	}
++#elif defined(__FreeBSD__) || defined(__OpenBSD__)
++	#include <pthread.h>
++	#include <pthread_np.h>
++
++	inline void setThreadName(const char *name) {
++		pthread_set_name_np(pthread_self(), name);
++	}
++#elif defined(__NetBSD__)
++	#include <pthread.h>
++
++	inline void setThreadName(const char *name) {
++		pthread_setname_np(pthread_self(), name);
++	}
++#elif defined(_MSC_VER)
++	typedef struct tagTHREADNAME_INFO {
++		DWORD dwType; // must be 0x1000
++		LPCSTR szName; // pointer to name (in user addr space)
++		DWORD dwThreadID; // thread ID (-1=caller thread)
++		DWORD dwFlags; // reserved for future use, must be zero
++	} THREADNAME_INFO;
++
++	inline void setThreadName(const char *name) {
++		THREADNAME_INFO info;
++		info.dwType = 0x1000;
++		info.szName = name;
++		info.dwThreadID = -1;
++		info.dwFlags = 0;
++		__try {
++			RaiseException(0x406D1388, 0, sizeof(info) / sizeof(DWORD), (ULONG_PTR *) &info);
++		} __except (EXCEPTION_CONTINUE_EXECUTION) {}
++	}
++#elif defined(__APPLE__)
++	#include <pthread.h>
++
++	inline void setThreadName(const char *name) {
++		pthread_setname_np(name);
++	}
++#elif defined(_WIN32) || defined(__GNU__)
++	inline void setThreadName(const char* name) {}
++#else
++	#warning "Unrecognized platform, thread names will not be available."
++	inline void setThreadName(const char* name) {}
++#endif
++
++
++#if defined(linux) || defined(__linux) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
++	#define PORTING_USE_PTHREAD 1
++	#include <pthread.h>
++#endif
++	inline void setThreadPriority(int priority) {
++#if PORTING_USE_PTHREAD
++	// http://en.cppreference.com/w/cpp/thread/thread/native_handle
++		sched_param sch;
++		//int policy;
++		//pthread_getschedparam(pthread_self(), &policy, &sch);
++		sch.sched_priority = priority;
++		if(pthread_setschedparam(pthread_self(), SCHED_FIFO /*SCHED_RR*/, &sch)) {
++			//std::cout << "Failed to setschedparam: " << std::strerror(errno) << '\n';
++		}
++#endif
++	}
+ 
+ #ifndef SERVER
+ float getDisplayDensity();
++float get_dpi();
++int get_densityDpi();
++void irr_device_wait_egl (irr::IrrlichtDevice * device = nullptr);
+ 
+ v2u32 getDisplaySize();
+ v2u32 getWindowSize();
+@@ -383,5 +466,5 @@
+ #include "porting_android.h"
+ #endif
+ 
+-#endif // PORTING_HEADER
+ 
++#endif // PORTING_HEADER

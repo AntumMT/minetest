@@ -1,0 +1,19 @@
+diff -ruN minetest-master/src/threading/mutex.cpp minetest-freeminer/src/threading/mutex.cpp
+--- minetest-master/src/threading/mutex.cpp	2016-09-03 16:15:52.521778000 -0700
++++ minetest-freeminer/src/threading/mutex.cpp	2016-09-03 15:43:59.638739000 -0700
+@@ -104,5 +104,15 @@
+ 	: Mutex(true)
+ {}
+ 
++
++bool Mutex::try_lock()
++{
++#ifdef _WIN32
++	return TryEnterCriticalSection(&mutex);
++#else
++	return !pthread_mutex_trylock(&mutex);
++#endif
++}
++
+ #endif
+ 

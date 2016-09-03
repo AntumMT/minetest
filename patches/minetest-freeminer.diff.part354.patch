@@ -1,0 +1,93 @@
+diff -ruN minetest-master/src/mapgen_v7.h minetest-freeminer/src/mapgen_v7.h
+--- minetest-master/src/mapgen_v7.h	2016-09-03 16:15:52.589779000 -0700
++++ minetest-freeminer/src/mapgen_v7.h	2016-09-03 15:43:59.930741000 -0700
+@@ -1,27 +1,31 @@
+ /*
+-Minetest
++mapgen_v7.h
+ Copyright (C) 2010-2015 kwolekr, Ryan Kwolek <kwolekr@minetest.net>
+ Copyright (C) 2010-2015 paramat, Matt Gregory
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #ifndef MAPGEN_V7_HEADER
+ #define MAPGEN_V7_HEADER
+ 
+ #include "mapgen.h"
++#include "mapgen_indev.h"
+ 
+ /////////////////// Mapgen V7 flags
+ #define MGV7_MOUNTAINS   0x01
+@@ -47,14 +51,22 @@
+ 	NoiseParams np_cave1;
+ 	NoiseParams np_cave2;
+ 
++	s16 float_islands;
++	NoiseParams np_float_islands1;
++	NoiseParams np_float_islands2;
++	NoiseParams np_float_islands3;
++	NoiseParams np_layers;
++	//NoiseParams np_cave_indev;
++	Json::Value paramsj;
++
+ 	MapgenV7Params();
+ 	~MapgenV7Params() {}
+ 
+-	void readParams(const Settings *settings);
++	void readParams(Settings *settings);
+ 	void writeParams(Settings *settings) const;
+ };
+ 
+-class MapgenV7 : public MapgenBasic {
++class MapgenV7 : public MapgenBasic, public Mapgen_features {
+ public:
+ 	MapgenV7(int mapgenid, MapgenV7Params *params, EmergeManager *emerge);
+ 	~MapgenV7();
+@@ -68,8 +80,8 @@
+ 	float baseTerrainLevelFromMap(int index);
+ 	bool getMountainTerrainAtPoint(s16 x, s16 y, s16 z);
+ 	bool getMountainTerrainFromMap(int idx_xyz, int idx_xz, s16 y);
+-	int generateTerrain();
+-	void generateRidgeTerrain();
++	virtual int generateTerrain();
++	virtual void generateRidgeTerrain();
+ 
+ private:
+ 	Noise *noise_terrain_base;
+@@ -80,6 +92,12 @@
+ 	Noise *noise_ridge_uwater;
+ 	Noise *noise_mountain;
+ 	Noise *noise_ridge;
++
++	//freeminer:
++	s16 float_islands;
++	virtual void generateExperimental();
++	//=========
++
+ };
+ 
+ #endif

@@ -1,0 +1,354 @@
+diff -ruN minetest-master/src/main.cpp minetest-freeminer/src/main.cpp
+--- minetest-master/src/main.cpp	2016-09-03 16:15:52.489778000 -0700
++++ minetest-freeminer/src/main.cpp	2016-09-03 15:43:59.862740000 -0700
+@@ -1,20 +1,24 @@
++
+ /*
+-Minetest
++main.cpp
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++/*
++This file is part of Freeminer.
++
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #ifdef _MSC_VER
+@@ -23,7 +27,7 @@
+ 		// This would get rid of the console window
+ 		//#pragma comment(linker, "/subsystem:windows /ENTRY:mainCRTStartup")
+ 	#endif
+-	#pragma comment(lib, "zlibwapi.lib")
++	//#pragma comment(lib, "zlibwapi.lib")
+ 	#pragma comment(lib, "Shell32.lib")
+ #endif
+ 
+@@ -40,13 +44,13 @@
+ #include "game.h"
+ #include "defaultsettings.h"
+ #include "gettext.h"
+-#include "log.h"
++#include "profiler.h"
++#include "log_types.h"
+ #include "quicktune.h"
+ #include "httpfetch.h"
+ #include "guiEngine.h"
+ #include "map.h"
+ #include "player.h"
+-#include "mapsector.h"
+ #include "fontengine.h"
+ #include "gameparams.h"
+ #include "database.h"
+@@ -58,16 +62,23 @@
+ #include "client/clientlauncher.h"
+ #endif
+ 
++#if USE_ENET
++// todo: move to connection
++#include "enet/enet.h"
++#endif
++
+ #ifdef HAVE_TOUCHSCREENGUI
+ 	#include "touchscreengui.h"
+ #endif
+ 
++/*
+ #if !defined(SERVER) && \
+ 	(IRRLICHT_VERSION_MAJOR == 1) && \
+ 	(IRRLICHT_VERSION_MINOR == 8) && \
+ 	(IRRLICHT_VERSION_REVISION == 2)
+ 	#error "Irrlicht 1.8.2 is known to be broken - please update Irrlicht to version >= 1.8.3"
+ #endif
++*/
+ 
+ #define DEBUGFILE "debug.txt"
+ #define DEFAULT_SERVER_PORT 30000
+@@ -140,7 +151,15 @@
+ 
+ int main(int argc, char *argv[])
+ {
+-	int retval;
++	int retval = 0;
++
++#if USE_ENET
++	if (enet_initialize() != 0) {
++		std::cerr << "enet failed to initialize\n";
++		return EXIT_FAILURE;
++	}
++	atexit(enet_deinitialize);
++#endif
+ 
+ 	debug_set_exception_handler();
+ 
+@@ -173,8 +192,8 @@
+ #endif
+ 
+ 	if (!create_userdata_path()) {
+-		errorstream << "Cannot create user data directory" << std::endl;
+-		return 1;
++		errorstream << "Cannot create user data directory "<< porting::path_user << std::endl;
++		//return 1;
+ 	}
+ 
+ 	// Initialize debug stacks
+@@ -198,7 +217,25 @@
+ 	if (!init_common(cmd_args, argc, argv))
+ 		return 1;
+ 
+-#ifndef __ANDROID__
++	// parse settings from cmdline. must be after loading settings. maybe better to move
++	for (int i = 1; i < argc; i++) {
++		std::string arg_name = argv[i];
++		if (arg_name.substr(0, 2) == "--" || arg_name[0] != '-')
++			continue;
++		std::string name = arg_name.substr(1);
++		std::string value;
++		auto vpos = name.find('=');
++		if (vpos != std::string::npos && name.size() > vpos) {
++			value = name.substr(vpos+1);
++			name.resize(vpos);
++		} else {
++			value = "1";
++		}
++		g_settings->set(name, value);
++		continue;
++	}
++
++#if !defined(__ANDROID__) && !defined(_MSC_VER)
+ 	// Run unit tests
+ 	if (cmd_args.getFlag("run-unittests")) {
+ 		return run_tests();
+@@ -295,6 +332,10 @@
+ 			_("Set gameid (\"--gameid list\" prints available ones)"))));
+ 	allowed_options->insert(std::make_pair("migrate", ValueSpec(VALUETYPE_STRING,
+ 			_("Migrate from current map backend to another (Only works when using minetestserver or with --server)"))));
++
++	allowed_options->insert(std::make_pair("autoexit", ValueSpec(VALUETYPE_STRING,
++			_("Exit after X seconds"))));
++
+ 	allowed_options->insert(std::make_pair("terminal", ValueSpec(VALUETYPE_FLAG,
+ 			_("Feature an interactive terminal (Only works when using minetestserver or with --server)"))));
+ #ifndef SERVER
+@@ -429,12 +470,16 @@
+ 	bool success;
+ 
+ #ifdef __ANDROID__
++	bool wait = false;
+ 	if (!fs::PathExists(porting::path_user)) {
+ 		success = fs::CreateDir(porting::path_user);
++		wait = true;
+ 	} else {
+ 		success = true;
+ 	}
++
+ 	porting::copyAssets();
++
+ #else
+ 	// Create user data directory
+ 	success = fs::CreateDir(porting::path_user);
+@@ -457,6 +502,10 @@
+ 
+ 	init_log_streams(cmd_args);
+ 
++	int autoexit_ = 0;
++	cmd_args.getS32NoEx("autoexit", autoexit_);
++	g_profiler_enabled = g_settings->getFloat("profiler_print_interval") || autoexit_;
++
+ 	// Initialize random seed
+ 	srand(time(0));
+ 	mysrand(time(0));
+@@ -467,6 +516,12 @@
+ 	init_gettext(porting::path_locale.c_str(),
+ 		g_settings->get("language"), argc, argv);
+ 
++#if defined(_WIN32)
++	//Remove windows console window if settings request
++	if (!g_settings->getBool("console_enabled"))
++		FreeConsole();
++#endif
++
+ 	return true;
+ }
+ 
+@@ -481,41 +536,46 @@
+ static bool read_config_file(const Settings &cmd_args)
+ {
+ 	// Path of configuration file in use
+-	sanity_check(g_settings_path == "");	// Sanity check
+ 
+ 	if (cmd_args.exists("config")) {
+ 		bool r = g_settings->readConfigFile(cmd_args.get("config").c_str());
+ 		if (!r) {
+ 			errorstream << "Could not read configuration from \""
+ 			            << cmd_args.get("config") << "\"" << std::endl;
+-			return false;
++			//return false;
+ 		}
+ 		g_settings_path = cmd_args.get("config");
+ 	} else {
+ 		std::vector<std::string> filenames;
+-		filenames.push_back(porting::path_user + DIR_DELIM + "minetest.conf");
++		filenames.push_back(porting::path_user + DIR_DELIM + "freeminer");
+ 		// Legacy configuration file location
+ 		filenames.push_back(porting::path_user +
+-				DIR_DELIM + ".." + DIR_DELIM + "minetest.conf");
++				DIR_DELIM + ".." + DIR_DELIM + "freeminer");
+ 
+ #if RUN_IN_PLACE
+ 		// Try also from a lower level (to aid having the same configuration
+ 		// for many RUN_IN_PLACE installs)
+ 		filenames.push_back(porting::path_user +
+-				DIR_DELIM + ".." + DIR_DELIM + ".." + DIR_DELIM + "minetest.conf");
++				DIR_DELIM + ".." + DIR_DELIM + ".." + DIR_DELIM + "freeminer");
+ #endif
+ 
+ 		for (size_t i = 0; i < filenames.size(); i++) {
+-			bool r = g_settings->readConfigFile(filenames[i].c_str());
++
++			if (g_settings->readJsonFile(filenames[i] + ".json")) {
++				g_settings_path = filenames[i] + ".json";
++				break;
++			}
++
++			bool r = g_settings->readConfigFile((filenames[i] + ".conf").c_str());
+ 			if (r) {
+-				g_settings_path = filenames[i];
++				g_settings_path = filenames[i] + ".conf";
+ 				break;
+ 			}
+ 		}
+ 
+ 		// If no path found, use the first one (menu creates the file)
+ 		if (g_settings_path == "")
+-			g_settings_path = filenames[0];
++			g_settings_path = filenames[0] + ".conf";
+ 	}
+ 
+ 	return true;
+@@ -560,8 +620,15 @@
+ 
+ 	verbosestream << "log_filename = " << log_filename << std::endl;
+ 
++	try {
+ 	file_log_output.open(log_filename.c_str());
+ 	g_logger.addOutputMaxLevel(&file_log_output, log_level);
++	} catch (std::exception &e) {
++		errorstream << ": log open exception: " << log_filename << " err: " << e.what() << std::endl;
++		g_logger.removeOutput(&file_log_output);
++	}
++
++	g_time_taker_enabled = g_settings->getU16("time_taker_enabled") ? g_settings->getU16("time_taker_enabled") : ((g_settings->getFloat("profiler_print_interval") || log_level >= LL_INFO) ? 100 : 0);
+ }
+ 
+ static bool game_configure(GameParams *game_params, const Settings &cmd_args)
+@@ -624,10 +691,16 @@
+ 			}
+ 		}
+ 		if (!found) {
++			std::string fullpath = porting::path_user + DIR_DELIM + "worlds" DIR_DELIM + commanded_worldname;
++			game_configure_subgame(game_params, cmd_args);
++			if (!loadGameConfAndInitWorld(fullpath, game_params->game_spec)) {
+ 			dstream << _("World") << " '" << commanded_worldname
+ 			        << _("' not available. Available worlds:") << std::endl;
+ 			print_worldspecs(worldspecs, dstream);
+ 			return false;
++			} else {
++				commanded_world = fullpath;
++			}
+ 		}
+ 
+ 		game_params->world_path = get_clean_world_path(commanded_world);
+@@ -689,7 +762,7 @@
+ 		           << world_path << "]" << std::endl;
+ 	}
+ 
+-	assert(world_path != "");	// Post-condition
++	//assert(world_path != "");	// Post-condition
+ 	game_params->world_path = world_path;
+ 	return true;
+ }
+@@ -745,12 +818,12 @@
+ {
+ 	SubgameSpec gamespec;
+ 
+-	assert(game_params->world_path != "");	// Pre-condition
++	//assert(game_params->world_path != "");	// Pre-condition
+ 
+ 	verbosestream << _("Determining gameid/gamespec") << std::endl;
+ 	// If world doesn't exist
+-	if (game_params->world_path != ""
+-			&& !getWorldExists(game_params->world_path)) {
++	if (game_params->world_path == ""
++			|| !getWorldExists(game_params->world_path)) {
+ 		// Try to take gamespec from command line
+ 		if (game_params->game_spec.isValid()) {
+ 			gamespec = game_params->game_spec;
+@@ -811,9 +884,10 @@
+ 	Address bind_addr(0, 0, 0, 0, game_params.socket_port);
+ 
+ 	if (g_settings->getBool("ipv6_server")) {
+-		bind_addr.setAddress((IPv6AddressBytes*) NULL);
++		bind_addr.setAddress(in6addr_any);
+ 	}
+ 	try {
++		if (!bind_str.empty())
+ 		bind_addr.Resolve(bind_str.c_str());
+ 	} catch (ResolveError &e) {
+ 		infostream << "Resolving bind address \"" << bind_str
+@@ -892,11 +966,16 @@
+ 	} {
+ #endif
+ 		try {
++
+ 			// Create server
+ 			Server server(game_params.world_path, game_params.game_spec, false,
+ 				bind_addr.isIPv6());
+ 			server.start(bind_addr);
+ 
++			int autoexit_ = 0;
++			cmd_args.getS32NoEx("autoexit", autoexit_);
++			server.m_autoexit = autoexit_;
++
+ 			// Run server
+ 			bool &kill = *porting::signal_handler_killstatus();
+ 			dedicated_server_loop(server, kill);
+@@ -948,6 +1027,18 @@
+ 	for (std::vector<v3s16>::const_iterator it = blocks.begin(); it != blocks.end(); ++it) {
+ 		if (kill) return false;
+ 
++		/* old slow migrate, but better for future leveldb
++		MapBlock *block = old_map.loadBlock(*i);
++		if (!block) {
++			errorstream << "Failed to load block " << *i << ", skipping it."<<std::endl;
++		}
++		else {
++			old_map.saveBlock(block, new_db);
++			old_map.m_blocks.erase(block->getPos());
++			delete block;
++		}
++		*/
++
+ 		std::string data;
+ 		old_db->loadBlock(*it, &data);
+ 		if (!data.empty()) {

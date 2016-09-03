@@ -1,0 +1,66 @@
+diff -ruN minetest-master/src/wieldmesh.cpp minetest-freeminer/src/wieldmesh.cpp
+--- minetest-master/src/wieldmesh.cpp	2016-09-03 16:15:52.681779000 -0700
++++ minetest-freeminer/src/wieldmesh.cpp	2016-09-03 15:43:59.814740000 -0700
+@@ -31,6 +31,9 @@
+ #include <map>
+ #include <IMeshManipulator.h>
+ 
++#include "map.h"
++#include "clientmap.h"
++
+ #define WIELD_SCALE_FACTOR 30.0
+ #define WIELD_SCALE_FACTOR_EXTRUDED 40.0
+ 
+@@ -341,7 +344,11 @@
+ 		} else if (f.drawtype == NDT_NORMAL || f.drawtype == NDT_ALLFACES) {
+ 			setCube(f.tiles, def.wield_scale, tsrc);
+ 		} else {
+-			MeshMakeData mesh_make_data(gamedef, false);
++			Map map(gamedef);
++			MapDrawControl map_draw_control;
++			//// TODO: Change false in the following constructor args to
++			//// appropriate value when shader is added for wield items (if applicable)
++			MeshMakeData mesh_make_data(gamedef, false, false, map, map_draw_control);
+ 			MapNode mesh_make_node(id, 255, 0);
+ 			mesh_make_data.fillSingleNode(&mesh_make_node);
+ 			MapBlockMesh mapblock_mesh(&mesh_make_data, v3s16(0, 0, 0));
+@@ -470,10 +477,39 @@
+ 			mesh = cloneMesh(g_extrusion_mesh_cache->createCube());
+ 			scaleMesh(mesh, v3f(1.2, 1.2, 1.2));
+ 		} else {
++
++//fm:
++// /*
++				Map map(gamedef);
++				MapDrawControl map_draw_control;
++				MeshMakeData mesh_make_data(gamedef, false, false, map, map_draw_control);
++				v3POS bp = v3POS(32000, 32000, 32000-id);
++				auto block = map.createBlankBlockNoInsert(bp);
++				auto air_node = MapNode(CONTENT_AIR, LIGHT_MAX);
++				for(s16 z0=0; z0<=2; ++z0)
++				for(s16 y0=0; y0<=2; ++y0)
++				for(s16 x0=0; x0<=2; ++x0) {
++					v3s16 p(x0,y0,z0);
++					block->setNode(p, air_node);
++				}
++				u8 param1 = 0;
++				u8 param2 = 0;
++				if (f.param_type_2 == CPT2_WALLMOUNTED)
++					param2 = 1;
++				MapNode mesh_make_node(id, param1, param2);
++				mesh_make_data.fillSingleNode(&mesh_make_node, bp);
++				block->setNode(v3s16(1,1,1), mesh_make_node);
++				map.insertBlock(block);
++				MapBlockMesh mapblock_mesh(&mesh_make_data, bp*MAP_BLOCKSIZE);
++// */
++//==
++
++/*MT
+ 			MeshMakeData mesh_make_data(gamedef, false);
+ 			MapNode mesh_make_node(id, 255, 0);
+ 			mesh_make_data.fillSingleNode(&mesh_make_node);
+ 			MapBlockMesh mapblock_mesh(&mesh_make_data, v3s16(0, 0, 0));
++*/
+ 			mesh = cloneMesh(mapblock_mesh.getMesh());
+ 			translateMesh(mesh, v3f(-BS, -BS, -BS));
+ 			scaleMesh(mesh, v3f(0.12, 0.12, 0.12));

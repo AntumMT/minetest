@@ -1,0 +1,25 @@
+diff -ruN minetest-master/misc/winresource.rc minetest-freeminer/misc/winresource.rc
+--- minetest-master/misc/winresource.rc	2016-09-03 16:15:52.429778000 -0700
++++ minetest-freeminer/misc/winresource.rc	2016-09-03 15:43:59.838740000 -0700
+@@ -12,7 +12,7 @@
+ #endif
+ 
+ LANGUAGE 0, SUBLANG_NEUTRAL
+-130        ICON         "minetest-icon.ico"
++130        ICON         "freeminer.ico"
+ 
+ /////////////////////////////////////////////////////////////////////////////
+ //
+@@ -41,9 +41,9 @@
+         VALUE "FileDescription", PROJECT_NAME_C " engine"
+         VALUE "FileVersion", VERSION_STRING
+         VALUE "InternalName", PROJECT_NAME
+-        VALUE "LegalCopyright", "(c) 2011-2015 celeron55"
+-        VALUE "LegalTrademarks", """Minetest"" is the property of the Minetest community, don't use it without permission!"
+-        VALUE "OriginalFilename", "minetest.exe"
++        VALUE "LegalCopyright", "(c) 2014-2015"
++        VALUE "LegalTrademarks", """Freeminer"" is the property of the Minetest community, don't use it without permission!"
++        VALUE "OriginalFilename", "freeminer.exe"
+         VALUE "PrivateBuild", VERSION_EXTRA
+         VALUE "ProductName", PROJECT_NAME_C
+         VALUE "ProductVersion", PRODUCT_VERSION_STRING

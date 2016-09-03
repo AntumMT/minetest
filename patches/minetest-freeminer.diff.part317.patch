@@ -1,0 +1,328 @@
+diff -ruN minetest-master/src/localplayer.cpp minetest-freeminer/src/localplayer.cpp
+--- minetest-master/src/localplayer.cpp	2016-09-03 16:15:52.477778000 -0700
++++ minetest-freeminer/src/localplayer.cpp	2016-09-03 15:43:59.494738000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++localplayer.cpp
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "localplayer.h"
+@@ -28,6 +31,8 @@
+ #include "map.h"
+ #include "util/numeric.h"
+ 
++#include "log_types.h"
++
+ /*
+ 	LocalPlayer
+ */
+@@ -44,8 +49,11 @@
+ 	last_keyPressed(0),
+ 	camera_impact(0.f),
+ 	last_animation(NO_ANIM),
++	/*
+ 	hotbar_image(""),
++	hotbar_image_items(0),
+ 	hotbar_selected_image(""),
++	*/
+ 	light_color(255,255,255,255),
+ 	m_sneak_node(32767,32767,32767),
+ 	m_sneak_node_exists(false),
+@@ -75,6 +83,8 @@
+ 
+ 	v3f position = getPosition();
+ 
++	//v3f old_speed = m_speed;
++
+ 	// Copy parent position if local player is attached
+ 	if(isAttached)
+ 	{
+@@ -110,14 +120,23 @@
+ 	// If in liquid, the threshold of coming out is at higher y
+ 	if (in_liquid)
+ 	{
+-		pp = floatToInt(position + v3f(0,BS*0.1,0), BS);
++		// If not in liquid, the threshold of going in is at lower y
++		pp = floatToInt(position + v3f(0,BS*(in_liquid ? 0.1 : 0.5),0), BS);
+ 		node = map->getNodeNoEx(pp, &is_valid_position);
+ 		if (is_valid_position) {
+-			in_liquid = nodemgr->get(node.getContent()).isLiquid();
+-			liquid_viscosity = nodemgr->get(node.getContent()).liquid_viscosity;
++			auto f = nodemgr->get(node.getContent());
++			in_liquid = f.isLiquid();
++			liquid_viscosity = f.liquid_viscosity;
++			if (f.param_type_2 == CPT2_LEVELED) {
++				float level = node.getLevel(nodemgr);
++				float maxlevel = node.getMaxLevel(nodemgr);
++				if (level && maxlevel && level < maxlevel)
++					liquid_viscosity /= maxlevel / level;
++			}
+ 		} else {
+ 			in_liquid = false;
+ 		}
++
+ 	}
+ 	// If not in liquid, the threshold of going in is at lower y
+ 	else
+@@ -158,8 +177,12 @@
+ 	if (!(is_valid_position && is_valid_position2)) {
+ 		is_climbing = false;
+ 	} else {
+-		is_climbing = (nodemgr->get(node.getContent()).climbable
++		bool can_climbing = (nodemgr->get(node.getContent()).climbable
+ 				|| nodemgr->get(node2.getContent()).climbable) && !free_move;
++		if (m_speed.Y >= -PLAYER_FALL_TOLERANCE_SPEED)
++			is_climbing = can_climbing;
++		else if (can_climbing)
++			m_speed.Y += 0.3*BS;
+ 	}
+ 
+ 
+@@ -169,10 +192,10 @@
+ 	*/
+ 	//f32 d = pos_max_d * 1.1;
+ 	// A fairly large value in here makes moving smoother
+-	f32 d = 0.15*BS;
++	//f32 d = 0.15*BS;
+ 
+ 	// This should always apply, otherwise there are glitches
+-	sanity_check(d > pos_max_d);
++	//sanity_check(d > pos_max_d);
+ 
+ 	// Maximum distance over border for sneaking
+ 	f32 sneak_max = BS*0.4;
+@@ -186,21 +209,31 @@
+ 			physics_override_sneak && !got_teleported) {
+ 		f32 maxd = 0.5 * BS + sneak_max;
+ 		v3f lwn_f = intToFloat(m_sneak_node, BS);
++		auto old_pos = position;
+ 		position.X = rangelim(position.X, lwn_f.X-maxd, lwn_f.X+maxd);
+ 		position.Z = rangelim(position.Z, lwn_f.Z-maxd, lwn_f.Z+maxd);
+ 
++		if (old_pos != position) {
++			m_speed.X = rangelim(m_speed.X, -movement_speed_climb, movement_speed_climb);
++			m_speed.Z = rangelim(m_speed.Z, -movement_speed_climb, movement_speed_climb);
++		}
++
+ 		if (!is_climbing) {
+ 			// Move up if necessary
+ 			f32 new_y = (lwn_f.Y - 0.5 * BS) + m_sneak_node_bb_ymax;
+-			if (position.Y < new_y)
++			if (position.Y < new_y && m_speed.Y >= -PLAYER_FALL_TOLERANCE_SPEED)
+ 				position.Y = new_y;
+ 			/*
+ 				Collision seems broken, since player is sinking when
+ 				sneaking over the edges of current sneaking_node.
+ 				TODO (when fixed): Set Y-speed only to 0 when position.Y < new_y.
+ 			*/
++			if (m_speed.Y < -PLAYER_FALL_TOLERANCE_SPEED)
++				m_speed.Y += 0.3*BS;
++			else
+ 			if (m_speed.Y < 0)
+ 				m_speed.Y = 0;
++
+ 		}
+ 	}
+ 
+@@ -210,9 +243,10 @@
+ 	// this shouldn't be hardcoded but transmitted from server
+ 	float player_stepheight = touching_ground ? (BS*0.6) : (BS*0.2);
+ 
+-#ifdef __ANDROID__
+-	player_stepheight += (0.6 * BS);
+-#endif
++	static const auto autojump = g_settings->getBool("autojump");
++	if (control.aux1 || autojump) {
++		player_stepheight += (0.6 * BS);
++	}
+ 
+ 	v3f accel_f = v3f(0,0,0);
+ 
+@@ -402,7 +436,38 @@
+ 	move(dtime, env, pos_max_d, NULL);
+ }
+ 
+-void LocalPlayer::applyControl(float dtime)
++bool LocalPlayer::canPlaceNode(const v3s16& p, const MapNode& n)
++{
++	bool noclip = m_gamedef->checkLocalPrivilege("noclip") &&
++		g_settings->getBool("noclip");
++	// Dont place node when player would be inside new node
++	// NOTE: This is to be eventually implemented by a mod as client-side Lua
++
++	if (m_gamedef->ndef()->get(n).walkable && !noclip && !g_settings->getBool("enable_build_where_you_stand")) {
++		std::vector<aabb3f> nodeboxes;
++		n.getNodeBoxes(m_gamedef->ndef(), &nodeboxes);
++		aabb3f player_box = m_collisionbox;
++		v3f position(getPosition());
++		v3f node_pos(p.X, p.Y, p.Z);
++		v3f center = player_box.getCenter();
++		v3f min_edge = (player_box.MinEdge - center) * 0.999f;
++		v3f max_edge = (player_box.MaxEdge - center) * 0.999f;
++		player_box.MinEdge = center + min_edge;
++		player_box.MaxEdge = center + max_edge;
++		player_box.MinEdge += position;
++		player_box.MaxEdge += position;
++		for(auto box : nodeboxes) {
++			box.MinEdge += node_pos * BS;
++			box.MaxEdge += node_pos * BS;
++			if(box.intersectsWithBox(player_box)) {
++				return false;
++			}
++		}
++	}
++	return true;
++}
++
++void LocalPlayer::applyControl(float dtime, ClientEnvironment *env)
+ {
+ 	// Clear stuff
+ 	swimming_vertical = false;
+@@ -426,15 +491,16 @@
+ 	bool fly_allowed = m_gamedef->checkLocalPrivilege("fly");
+ 	bool fast_allowed = m_gamedef->checkLocalPrivilege("fast");
+ 
+-	bool free_move = fly_allowed && g_settings->getBool("free_move");
++	free_move = fly_allowed && g_settings->getBool("free_move");
+ 	bool fast_move = fast_allowed && g_settings->getBool("fast_move");
+ 	// When aux1_descends is enabled the fast key is used to go down, so fast isn't possible
+ 	bool fast_climb = fast_move && control.aux1 && !g_settings->getBool("aux1_descends");
+ 	bool continuous_forward = g_settings->getBool("continuous_forward");
++	bool fast_pressed = false;
+ 	bool always_fly_fast = g_settings->getBool("always_fly_fast");
+ 
+ 	// Whether superspeed mode is used or not
+-	bool superspeed = false;
++	superspeed = false;
+ 
+ 	if (always_fly_fast && free_move && fast_move)
+ 		superspeed = true;
+@@ -470,7 +536,7 @@
+ 			{
+ 				// If not free movement but fast is allowed, aux1 is
+ 				// "Turbo button"
+-				if(fast_move)
++				if(fast_allowed)
+ 					superspeed = true;
+ 			}
+ 		}
+@@ -484,9 +550,11 @@
+ 			if(!is_climbing)
+ 			{
+ 				// aux1 is "Turbo button"
+-				if(fast_move)
++				if(fast_allowed)
+ 					superspeed = true;
+ 			}
++			if(fast_allowed)
++				fast_pressed = true;
+ 		}
+ 
+ 		if(control.sneak)
+@@ -595,7 +663,7 @@
+ 	}
+ 
+ 	// The speed of the player (Y is ignored)
+-	if(superspeed || (is_climbing && fast_climb) || ((in_liquid || in_liquid_stable) && fast_climb))
++	if(superspeed || (is_climbing && fast_climb) || ((in_liquid || in_liquid_stable) && fast_climb) || fast_pressed)
+ 		speedH = speedH.normalize() * movement_speed_fast;
+ 	else if(control.sneak && !free_move && !in_liquid && !in_liquid_stable)
+ 		speedH = speedH.normalize() * movement_speed_crouch;
+@@ -613,6 +681,22 @@
+ 		else
+ 			incH = movement_acceleration_air * BS * dtime;
+ 		incV = 0; // No vertical acceleration in air
++
++		// better air control when falling fast
++		float speed = m_speed.getLength();
++		if (!superspeed && speed > movement_speed_fast && (control.down || control.up || control.left || control.right)) {
++			v3f rotate = move_direction * (speed / (movement_fall_aerodynamics * BS));
++
++			if(control.up)		rotate = rotate.crossProduct(v3f(0,1,0));
++			if(control.down)	rotate = rotate.crossProduct(v3f(0,-1,0));
++			if(control.left)	rotate *=-1;
++			m_speed.rotateYZBy(rotate.X);
++			m_speed.rotateXZBy(rotate.Y);
++			m_speed.rotateXYBy(rotate.Z);
++			m_speed = m_speed.normalize() * speed * (1-speed*0.00001); // 0.998
++			if (m_speed.Y)
++				return;
++		}
+ 	}
+ 	else if (superspeed || (is_climbing && fast_climb) || ((in_liquid || in_liquid_stable) && fast_climb))
+ 		incH = incV = movement_acceleration_fast * BS * dtime;
+@@ -620,7 +704,15 @@
+ 		incH = incV = movement_acceleration_default * BS * dtime;
+ 
+ 	// Accelerate to target speed with maximum increment
+-	accelerateHorizontal(speedH * physics_override_speed, incH * physics_override_speed);
++	INodeDefManager *nodemgr = m_gamedef->ndef();
++	Map *map = &env->getMap();
++	v3s16 p = floatToInt(getPosition() - v3f(0,BS/2,0), BS);
++	float slippery = 0;
++	try {
++		slippery = itemgroup_get(nodemgr->get(map->getNode(p)).groups, "slippery");
++	}
++	catch (...) {}
++	accelerateHorizontal(speedH * physics_override_speed, incH * physics_override_speed, slippery);
+ 	accelerateVertical(speedV * physics_override_speed, incV * physics_override_speed);
+ }
+ 
+@@ -632,12 +724,21 @@
+ }
+ 
+ // Horizontal acceleration (X and Z), Y direction is ignored
+-void LocalPlayer::accelerateHorizontal(const v3f &target_speed, const f32 max_increase)
++void LocalPlayer::accelerateHorizontal(const v3f &target_speed, const f32 max_increase, float slippery)
+ {
+         if (max_increase == 0)
+                 return;
+ 
+         v3f d_wanted = target_speed - m_speed;
++
++	if (slippery && !free_move)
++	{
++		if (target_speed == v3f(0))
++			d_wanted = -m_speed*(1-slippery/100)/2;
++		else
++			d_wanted = target_speed*(1-slippery/100) - m_speed*(1-slippery/100);
++	}
++
+         d_wanted.Y = 0;
+         f32 dl = d_wanted.getLength();
+         if (dl > max_increase)
+@@ -647,6 +748,7 @@
+ 
+         m_speed.X += d.X;
+         m_speed.Z += d.Z;
++
+ }
+ 
+ // Vertical acceleration (Y), X and Z directions are ignored

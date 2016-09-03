@@ -1,0 +1,134 @@
+diff -ruN minetest-master/builtin/mainmenu/common.lua minetest-freeminer/builtin/mainmenu/common.lua
+--- minetest-master/builtin/mainmenu/common.lua	2016-09-03 16:15:52.569779000 -0700
++++ minetest-freeminer/builtin/mainmenu/common.lua	2016-09-03 15:43:59.910741000 -0700
+@@ -35,6 +35,7 @@
+ 
+ --------------------------------------------------------------------------------
+ local function render_client_count(n)
++	n = n + 0
+ 	if     n > 99 then return '99+'
+ 	elseif n >= 0 then return tostring(n)
+ 	else return '?' end
+@@ -60,16 +61,17 @@
+ --------------------------------------------------------------------------------
+ function order_favorite_list(list)
+ 	local res = {}
++	if not list then list = {} end
+ 	--orders the favorite list after support
+ 	for i = 1, #list do
+ 		local fav = list[i]
+-		if is_server_protocol_compat(fav.proto_min, fav.proto_max) then
++		if is_server_protocol_compat(fav.proto_min, fav.proto_max, fav.proto) then
+ 			res[#res + 1] = fav
+ 		end
+ 	end
+ 	for i = 1, #list do
+ 		local fav = list[i]
+-		if not is_server_protocol_compat(fav.proto_min, fav.proto_max) then
++		if not is_server_protocol_compat(fav.proto_min, fav.proto_max, fav.proto) then
+ 			res[#res + 1] = fav
+ 		end
+ 	end
+@@ -79,17 +81,17 @@
+ --------------------------------------------------------------------------------
+ function render_favorite(spec, is_favorite)
+ 	local text = ""
+-	if spec.name then
++	if spec.name and spec.name ~= "" then
+ 		text = text .. core.formspec_escape(spec.name:trim())
+ 	elseif spec.address then
+ 		text = text .. spec.address:trim()
+-		if spec.port then
++		if spec.port and tostring(spec.port) ~= "30000" then
+ 			text = text .. ":" .. spec.port
+ 		end
+ 	end
+ 
+ 	local details = ""
+-	local grey_out = not is_server_protocol_compat(spec.proto_min, spec.proto_max)
++	local grey_out = not is_server_protocol_compat(spec.proto_min, spec.proto_max, spec.proto)
+ 
+ 	if is_favorite then
+ 		details = "1,"
+@@ -196,7 +198,16 @@
+ --------------------------------------------------------------------------------
+ function asyncOnlineFavourites()
+ 	if not menudata.public_known then
+-		menudata.public_known = {{
++		local file = io.open( core.setting_get("serverlist_cache"), "r" )
++		if file then
++			local data = file:read("*all")
++			menudata.public_known = core.parse_json( data )
++			file:close()
++		end
++	end
++
++	if not menudata.public_known then
++	menudata.public_known = {{
+ 			name = fgettext("Loading..."),
+ 			description = fgettext_ne("Try reenabling public serverlist and check your internet connection.")
+ 		}}
+@@ -222,12 +233,34 @@
+ 				menudata.public_known = favs
+ 				menudata.favorites = menudata.public_known
+ 				menudata.favorites_is_public = true
++
++					local file = io.open( core.setting_get("serverlist_cache"), "w" )
++					if file then
++						file:write( core.write_json( favs ) )
++						file:close()
++					end
++
+ 			end
+ 			core.event_handler("Refresh")
+ 		end
+ 	)
+ end
+ 
++function updater_init()
++	local updater_req =  function(param) return core.get_favorites("sleep_cache") end
++	local updater_res;
++	updater_res = function(result)
++			if core.setting_getbool("public_serverlist") and result[1] then
++				local favs = order_favorite_list(result)
++					menudata.public_known = favs
++					menudata.favorites = menudata.public_known
++				core.event_handler("Refresh")
++			end
++	core.handle_async(updater_req, nil, updater_res)
++	end
++	core.handle_async(updater_req, nil, updater_res)
++end
++
+ --------------------------------------------------------------------------------
+ function text2textlist(xpos, ypos, width, height, tl_name, textlen, text, transparency)
+ 	local textlines = core.splittext(text, textlen)
+@@ -247,17 +280,24 @@
+ end
+ 
+ --------------------------------------------------------------------------------
+-function is_server_protocol_compat(server_proto_min, server_proto_max)
++function is_server_protocol_compat(server_proto_min, server_proto_max, proto)
++	if proto and core.setting_get("server_proto") ~= proto then return false end
+ 	if (not server_proto_min) or (not server_proto_max) then
+ 		-- There is no info. Assume the best and act as if we would be compatible.
+ 		return true
+ 	end
+-	return min_supp_proto <= server_proto_max and max_supp_proto >= server_proto_min
++	return tonumber(min_supp_proto) <= tonumber(server_proto_max) and tonumber(max_supp_proto) >= tonumber(server_proto_min)
+ end
+ --------------------------------------------------------------------------------
+-function is_server_protocol_compat_or_error(server_proto_min, server_proto_max)
+-	if not is_server_protocol_compat(server_proto_min, server_proto_max) then
++function is_server_protocol_compat_or_error(server_proto_min, server_proto_max, proto)
++	if not is_server_protocol_compat(server_proto_min, server_proto_max, proto) then
+ 		local server_prot_ver_info, client_prot_ver_info
++
++		if proto and core.setting_get("server_proto") ~= proto then 
++			server_prot_ver_info = fgettext_ne("Server supports protocol $1, but we can connect only to $2 ",
++				proto or '?', core.setting_get("server_proto") )
++		end
++
+ 		local s_p_min = server_proto_min
+ 		local s_p_max = server_proto_max
+ 

@@ -1,0 +1,151 @@
+diff -ruN minetest-master/src/network/clientpackethandler.cpp minetest-freeminer/src/network/clientpackethandler.cpp
+--- minetest-master/src/network/clientpackethandler.cpp	2016-09-03 16:15:52.613779000 -0700
++++ minetest-freeminer/src/network/clientpackethandler.cpp	2016-09-03 15:43:59.942741000 -0700
+@@ -17,6 +17,12 @@
+ 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+ 
++#include "config.h"
++
++#if !MINETEST_PROTO
++#include "network/fm_clientpackethandler.cpp"
++#else //TODO
++
+ #include "client.h"
+ 
+ #include "util/base64.h"
+@@ -140,7 +146,7 @@
+ }
+ void Client::handleCommand_DenySudoMode(NetworkPacket* pkt)
+ {
+-	m_chat_queue.push(L"Password change denied. Password NOT changed.");
++	m_chat_queue.push("Password change denied. Password NOT changed.");
+ 	// reset everything and be sad
+ 	deleteAuthData();
+ }
+@@ -255,7 +261,7 @@
+ 
+ 	v3s16 p;
+ 	*pkt >> p;
+-	removeNode(p);
++	removeNode(p, 2);
+ }
+ 
+ void Client::handleCommand_AddNode(NetworkPacket* pkt)
+@@ -275,7 +281,7 @@
+ 		remove_metadata = false;
+ 	}
+ 
+-	addNode(p, n, remove_metadata);
++	addNode(p, n, remove_metadata, 2);
+ }
+ void Client::handleCommand_BlockData(NetworkPacket* pkt)
+ {
+@@ -289,20 +295,22 @@
+ 	std::string datastring(pkt->getString(6), pkt->getSize() - 6);
+ 	std::istringstream istr(datastring, std::ios_base::binary);
+ 
+-	MapSector *sector;
+ 	MapBlock *block;
+ 
+-	v2s16 p2d(p.X, p.Z);
+-	sector = m_env.getMap().emergeSector(p2d);
++	///v2s16 p2d(p.X, p.Z);
++	auto * sector = &m_env.getMap();
+ 
+-	assert(sector->getPos() == p2d);
++	//assert(sector->getPos() == p2d);
+ 
+-	block = sector->getBlockNoCreateNoEx(p.Y);
++	block = sector->getBlockNoCreateNoEx(p);
+ 	if (block) {
+ 		/*
+ 			Update an existing block
+ 		*/
+-		block->deSerialize(istr, m_server_ser_ver, false);
++		if (!block->deSerialize(istr, m_server_ser_ver, false)) {
++			delete block;
++			return;
++		}
+ 		block->deSerializeNetworkSpecific(istr);
+ 	}
+ 	else {
+@@ -310,7 +318,10 @@
+ 			Create a new block
+ 		*/
+ 		block = new MapBlock(&m_env.getMap(), p, this);
+-		block->deSerialize(istr, m_server_ser_ver, false);
++		if(!block->deSerialize(istr, m_server_ser_ver, false)){
++			delete block;
++			return;
++		}
+ 		block->deSerializeNetworkSpecific(istr);
+ 		sector->insertBlock(block);
+ 	}
+@@ -322,7 +333,11 @@
+ 	/*
+ 		Add it to mesh update queue and set it to be acknowledged after update.
+ 	*/
+-	addUpdateMeshTaskWithEdge(p, true);
++	updateMeshTimestampWithEdge(p);
++	if (!overload && getNodeBlockPos(floatToInt(m_env.getLocalPlayer()->getPosition(), BS)).getDistanceFrom(p) <= 1)
++		addUpdateMeshTaskWithEdge(p);
++
++	sendGotBlocks(p);
+ }
+ 
+ void Client::handleCommand_Inventory(NetworkPacket* pkt)
+@@ -410,7 +425,7 @@
+ 		message += (wchar_t)read_wchar;
+ 	}
+ 
+-	m_chat_queue.push(message);
++	m_chat_queue.push(wide_to_narrow(message));
+ }
+ 
+ void Client::handleCommand_ActiveObjectRemoveAdd(NetworkPacket* pkt)
+@@ -578,10 +593,7 @@
+ 	m_ignore_damage_timer = 3.0;
+ }
+ 
+-void Client::handleCommand_PlayerItem(NetworkPacket* pkt)
+-{
+-	warningstream << "Client: Ignoring TOCLIENT_PLAYERITEM" << std::endl;
+-}
++void Client::handleCommand_PunchPlayer(NetworkPacket* pkt) { }
+ 
+ void Client::handleCommand_DeathScreen(NetworkPacket* pkt)
+ {
+@@ -1124,8 +1136,8 @@
+ 
+ 	*pkt >> param >> value;
+ 
+-	Player *player = m_env.getLocalPlayer();
+-	assert(player != NULL);
++	auto *player = m_env.getLocalPlayer();
++	//assert(player != NULL);
+ 
+ 	if (param == HUD_PARAM_HOTBAR_ITEMCOUNT && value.size() == 4) {
+ 		s32 hotbar_itemcount = readS32((u8*) value.c_str());
+@@ -1133,10 +1145,13 @@
+ 			player->hud_hotbar_itemcount = hotbar_itemcount;
+ 	}
+ 	else if (param == HUD_PARAM_HOTBAR_IMAGE) {
+-		((LocalPlayer *) player)->hotbar_image = value;
++		player->hotbar_image = value;
++	}
++	else if (param == HUD_PARAM_HOTBAR_IMAGE_ITEMS) {
++		player->hotbar_image_items = stoi(value);
+ 	}
+ 	else if (param == HUD_PARAM_HOTBAR_SELECTED_IMAGE) {
+-		((LocalPlayer *) player)->hotbar_selected_image = value;
++		player->hotbar_selected_image = value;
+ 	}
+ }
+ 
+@@ -1229,3 +1244,5 @@
+ 	resp_pkt << std::string(bytes_M, len_M);
+ 	Send(&resp_pkt);
+ }
++
++#endif

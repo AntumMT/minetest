@@ -1,0 +1,2634 @@
+diff -ruN minetest-master/src/environment.cpp minetest-freeminer/src/environment.cpp
+--- minetest-master/src/environment.cpp	2016-09-03 16:15:52.509778000 -0700
++++ minetest-freeminer/src/environment.cpp	2016-09-03 15:43:59.514738000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++environment.cpp
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include <fstream>
+@@ -27,11 +30,12 @@
+ #include "serverobject.h"
+ #include "content_sao.h"
+ #include "settings.h"
+-#include "log.h"
++#include "log_types.h"
+ #include "profiler.h"
+ #include "scripting_game.h"
+ #include "nodedef.h"
+ #include "nodemetadata.h"
++//#include <fstream>
+ #include "gamedef.h"
+ #ifndef SERVER
+ #include "clientmap.h"
+@@ -39,15 +43,26 @@
+ #include "mapblock_mesh.h"
+ #include "event.h"
+ #endif
++
++#include "contrib/fallingsao.h"
++#include "contrib/itemsao.h"
++
+ #include "server.h"
+ #include "daynightratio.h"
+ #include "map.h"
+ #include "emerge.h"
+ #include "util/serialize.h"
++#include "fm_bitset.h"
++#include "circuit.h"
++#include "key_value_storage.h"
++#include <random>
+ #include "threading/mutex_auto_lock.h"
+ 
+ #define PP(x) "("<<(x).X<<","<<(x).Y<<","<<(x).Z<<")"
+ 
++std::random_device random_device; // todo: move me to random.h
++std::mt19937 random_gen(random_device());
++
+ #define LBM_NAME_ALLOWED_CHARS "abcdefghijklmnopqrstuvwxyz0123456789_:"
+ 
+ // A number that is much smaller than the timeout for particle spawners should/could ever be
+@@ -55,16 +70,20 @@
+ 
+ Environment::Environment():
+ 	m_time_of_day_speed(0),
++/*
+ 	m_time_of_day(9000),
+ 	m_time_of_day_f(9000./24000),
++*/
+ 	m_time_conversion_skew(0.0f),
+ 	m_enable_day_night_ratio_override(false),
+ 	m_day_night_ratio_override(0.0f)
+ {
++	m_time_of_day = 9000;
+ 	m_cache_enable_shaders = g_settings->getBool("enable_shaders");
+ 	m_cache_active_block_mgmt_interval = g_settings->getFloat("active_block_mgmt_interval");
+ 	m_cache_abm_interval = g_settings->getFloat("abm_interval");
+ 	m_cache_nodetimer_interval = g_settings->getFloat("nodetimer_interval");
++	m_day_count = 0;
+ }
+ 
+ Environment::~Environment()
+@@ -74,6 +93,7 @@
+ 			i != m_players.end(); ++i) {
+ 		delete (*i);
+ 	}
++	m_players.clear();
+ }
+ 
+ void Environment::addPlayer(Player *player)
+@@ -95,6 +115,7 @@
+ 
+ void Environment::removePlayer(Player* player)
+ {
++	auto lock = m_players.lock_unique_rec();
+ 	for (std::vector<Player*>::iterator it = m_players.begin();
+ 			it != m_players.end(); ++it) {
+ 		if ((*it) == player) {
+@@ -107,6 +128,7 @@
+ 
+ Player * Environment::getPlayer(u16 peer_id)
+ {
++	auto lock = m_players.lock_shared_rec();
+ 	for(std::vector<Player*>::iterator i = m_players.begin();
+ 			i != m_players.end(); ++i) {
+ 		Player *player = *i;
+@@ -116,52 +138,16 @@
+ 	return NULL;
+ }
+ 
+-Player * Environment::getPlayer(const char *name)
+-{
+-	for(std::vector<Player*>::iterator i = m_players.begin();
+-			i != m_players.end(); ++i) {
+-		Player *player = *i;
+-		if(strcmp(player->getName(), name) == 0)
+-			return player;
+-	}
+-	return NULL;
+-}
+-
+-Player * Environment::getRandomConnectedPlayer()
++Player * Environment::getPlayer(const std::string &name)
+ {
+-	std::vector<Player*> connected_players = getPlayers(true);
+-	u32 chosen_one = myrand() % connected_players.size();
+-	u32 j = 0;
+-	for(std::vector<Player*>::iterator
+-			i = connected_players.begin();
+-			i != connected_players.end(); ++i) {
+-		if(j == chosen_one) {
+-			Player *player = *i;
++	auto lock = m_players.lock_shared_rec();
++	for(auto &player : m_players) {
++ 		if(player->getName() == name)
+ 			return player;
+-		}
+-		j++;
+ 	}
+ 	return NULL;
+ }
+ 
+-Player * Environment::getNearestConnectedPlayer(v3f pos)
+-{
+-	std::vector<Player*> connected_players = getPlayers(true);
+-	f32 nearest_d = 0;
+-	Player *nearest_player = NULL;
+-	for(std::vector<Player*>::iterator
+-			i = connected_players.begin();
+-			i != connected_players.end(); ++i) {
+-		Player *player = *i;
+-		f32 d = player->getPosition().getDistanceFrom(pos);
+-		if(d < nearest_d || nearest_player == NULL) {
+-			nearest_d = d;
+-			nearest_player = player;
+-		}
+-	}
+-	return nearest_player;
+-}
+-
+ std::vector<Player*> Environment::getPlayers()
+ {
+ 	return m_players;
+@@ -188,10 +174,10 @@
+ 
+ u32 Environment::getDayNightRatio()
+ {
+-	MutexAutoLock lock(this->m_time_lock);
+ 	if (m_enable_day_night_ratio_override)
+ 		return m_day_night_ratio_override;
+-	return time_to_daynight_ratio(m_time_of_day_f * 24000, m_cache_enable_shaders);
++	MutexAutoLock lock(this->m_time_lock);
++	return time_to_daynight_ratio(m_time_of_day, m_cache_enable_shaders);
+ }
+ 
+ void Environment::setTimeOfDaySpeed(float speed)
+@@ -217,7 +203,6 @@
+ 	if (m_time_of_day > time)
+ 		m_day_count++;
+ 	m_time_of_day = time;
+-	m_time_of_day_f = (float)time / 24000.0;
+ }
+ 
+ u32 Environment::getTimeOfDay()
+@@ -229,7 +214,10 @@
+ float Environment::getTimeOfDayF()
+ {
+ 	MutexAutoLock lock(this->m_time_lock);
++	return (float)m_time_of_day / 24000.0;
++/*
+ 	return m_time_of_day_f;
++*/
+ }
+ 
+ void Environment::stepTimeOfDay(float dtime)
+@@ -246,17 +234,25 @@
+ 	bool sync_f = false;
+ 	if (units > 0) {
+ 		// Sync at overflow
++
+ 		if (m_time_of_day + units >= 24000) {
+ 			sync_f = true;
+ 			m_day_count++;
+ 		}
+-		m_time_of_day = (m_time_of_day + units) % 24000;
++
++		m_time_of_day = (m_time_of_day + units); // % 24000;
++		if (sync_f)
++			m_time_of_day %= 24000;
++
++/*
+ 		if (sync_f)
+ 			m_time_of_day_f = (float)m_time_of_day / 24000.0;
++*/
+ 	}
+ 	if (speed > 0) {
+ 		m_time_conversion_skew -= (f32)units / speed;
+ 	}
++/*
+ 	if (!sync_f) {
+ 		m_time_of_day_f += cached_time_of_day_speed / 24 / 3600 * dtime;
+ 		if (m_time_of_day_f > 1.0)
+@@ -264,6 +260,7 @@
+ 		if (m_time_of_day_f < 0.0)
+ 			m_time_of_day_f += 1.0;
+ 	}
++*/
+ }
+ 
+ u32 Environment::getDayCount()
+@@ -277,16 +274,44 @@
+ 	ABMWithState
+ */
+ 
+-ABMWithState::ABMWithState(ActiveBlockModifier *abm_):
++ABMWithState::ABMWithState(ActiveBlockModifier *abm_, ServerEnvironment *senv):
+ 	abm(abm_),
+-	timer(0)
+-{
++	timer(0),
++	required_neighbors(CONTENT_ID_CAPACITY),
++	required_neighbors_activate(CONTENT_ID_CAPACITY)
++{
++	auto ndef = senv->getGameDef()->ndef();
++	interval = abm->getTriggerInterval();
++	if (!interval)
++		interval = 10;
++	chance = abm->getTriggerChance();
++	if (!chance)
++		chance = 50;
++
++	// abm process may be very slow if > 1
++	neighbors_range = abm->getNeighborsRange();
++	int nr_max = g_settings->getS32("abm_neighbors_range_max");
++	if (!neighbors_range)
++		neighbors_range = 1;
++	else if (neighbors_range > nr_max)
++		neighbors_range = nr_max;
++
++	simple_catchup = abm->getSimpleCatchUp();
++
+ 	// Initialize timer to random value to spread processing
+-	float itv = abm->getTriggerInterval();
+-	itv = MYMAX(0.001, itv); // No less than 1ms
++	float itv = MYMAX(0.001, interval); // No less than 1ms
+ 	int minval = MYMAX(-0.51*itv, -60); // Clamp to
+ 	int maxval = MYMIN(0.51*itv, 60);   // +-60 seconds
+ 	timer = myrand_range(minval, maxval);
++
++	for(auto & i : abm->getRequiredNeighbors(0))
++		ndef->getIds(i, required_neighbors);
++
++	for(auto & i : abm->getRequiredNeighbors(1))
++		ndef->getIds(i, required_neighbors_activate);
++
++	for(auto & i : abm->getTriggerContents())
++		ndef->getIds(i, trigger_ids);
+ }
+ 
+ /*
+@@ -311,7 +336,7 @@
+ 
+ 	for (std::set<std::string>::const_iterator it = lbm_def->trigger_contents.begin();
+ 			it != lbm_def->trigger_contents.end(); ++it) {
+-		std::set<content_t> c_ids;
++		std::unordered_set<content_t> c_ids;
+ 		bool found = nodedef->getIds(*it, c_ids);
+ 		if (!found) {
+ 			content_t c_id = gamedef->allocateUnknownNodeId(*it);
+@@ -324,7 +349,7 @@
+ 			c_ids.insert(c_id);
+ 		}
+ 
+-		for (std::set<content_t>::const_iterator iit =
++		for (auto iit =
+ 				c_ids.begin(); iit != c_ids.end(); ++iit) {
+ 			content_t c_id = *iit;
+ 			map[c_id].push_back(lbm_def);
+@@ -541,10 +566,10 @@
+ 		Find out which blocks on the old list are not on the new list
+ 	*/
+ 	// Go through old list
+-	for(std::set<v3s16>::iterator i = m_list.begin();
++	for(auto i = m_list.begin();
+ 			i != m_list.end(); ++i)
+ 	{
+-		v3s16 p = *i;
++		v3POS p = i->first;
+ 		// If not on new list, it's been removed
+ 		if(newlist.find(p) == newlist.end())
+ 			blocks_removed.insert(p);
+@@ -571,7 +596,7 @@
+ 			i != newlist.end(); ++i)
+ 	{
+ 		v3s16 p = *i;
+-		m_list.insert(p);
++		m_list.set(p, 1);
+ 	}
+ }
+ 
+@@ -580,20 +605,42 @@
+ */
+ 
+ ServerEnvironment::ServerEnvironment(ServerMap *map,
+-		GameScripting *scriptIface, IGameDef *gamedef,
++		GameScripting *scriptIface,
++		IGameDef *gamedef,
+ 		const std::string &path_world) :
++	m_abmhandler(this),
++	m_game_time_start(0),
+ 	m_map(map),
+ 	m_script(scriptIface),
+ 	m_gamedef(gamedef),
++	m_circuit(m_script, map, gamedef->ndef(), path_world),
+ 	m_path_world(path_world),
+ 	m_send_recommended_timer(0),
+-	m_active_block_interval_overload_skip(0),
+-	m_game_time(0),
++	m_active_objects_last(0),
++	m_active_block_abm_last(0),
++	m_active_block_abm_dtime(0),
++	m_active_block_abm_dtime_counter(0),
++	m_active_block_timer_last(0),
++	m_blocks_added_last(0),
++	m_active_block_analyzed_last(0),
+ 	m_game_time_fraction_counter(0),
+ 	m_last_clear_objects_time(0),
+-	m_recommended_send_interval(0.1),
++	m_recommended_send_interval(g_settings->getFloat("dedicated_server_step")),
+ 	m_max_lag_estimate(0.1)
+ {
++	m_game_time = 0;
++	m_use_weather = g_settings->getBool("weather");
++	m_use_weather_biome = g_settings->getBool("weather_biome");
++
++	// Init custom SAO
++	v3f nullpos;
++	//epixel::Creature* c = new epixel::Creature(NULL, nullpos, "", "");
++	epixel::ItemSAO* i = new epixel::ItemSAO(NULL, nullpos, "", "");
++	epixel::FallingSAO* f = new epixel::FallingSAO(NULL, nullpos, "", "");
++	//delete c;
++	delete i;
++	delete f;
++
+ }
+ 
+ ServerEnvironment::~ServerEnvironment()
+@@ -604,6 +651,18 @@
+ 
+ 	// Convert all objects to static and delete the active objects
+ 	deactivateFarObjects(true);
++	removeRemovedObjects(50000);
++	if (!objects_to_delete.empty())
++		removeRemovedObjects(50000);
++
++/*
++	for (auto & o : objects_to_delete) {
++		if (!o)
++			continue;
++		delete o;
++	}
++	objects_to_delete.clear();
++*/
+ 
+ 	// Drop/delete map
+ 	m_map->drop();
+@@ -613,6 +672,7 @@
+ 			i = m_abms.begin(); i != m_abms.end(); ++i){
+ 		delete i->abm;
+ 	}
++	m_abms.clear();
+ }
+ 
+ Map & ServerEnvironment::getMap()
+@@ -625,6 +685,17 @@
+ 	return *m_map;
+ }
+ 
++KeyValueStorage &ServerEnvironment::getKeyValueStorage(std::string name)
++{
++	if (name.empty()) {
++		name = "key_value_storage";
++	}
++	if (!m_key_value_storage.count(name)) {
++		m_key_value_storage.emplace(std::piecewise_construct, std::forward_as_tuple(name), std::forward_as_tuple(m_path_world, name));
++	}
++	return m_key_value_storage.at(name);
++}
++
+ bool ServerEnvironment::line_of_sight(v3f pos1, v3f pos2, float stepsize, v3s16 *p)
+ {
+ 	float distance = pos1.getDistanceFrom(pos2);
+@@ -666,56 +737,86 @@
+ 
+ void ServerEnvironment::saveLoadedPlayers()
+ {
+-	std::string players_path = m_path_world + DIR_DELIM "players";
+-	fs::CreateDir(players_path);
+-
+-	for (std::vector<Player*>::iterator it = m_players.begin();
+-			it != m_players.end();
+-			++it) {
+-		RemotePlayer *player = static_cast<RemotePlayer*>(*it);
+-		if (player->checkModified()) {
+-			player->save(players_path);
++	auto lock = m_players.lock_unique_rec();
++	auto i = m_players.begin();
++	while (i != m_players.end())
++	{
++		auto *player = *i;
++		savePlayer((RemotePlayer*)player);
++		if(!player->peer_id && !player->getPlayerSAO() && player->refs <= 0) {
++			delete player;
++			i = m_players.erase(i);
++		} else {
++			++i;
+ 		}
+ 	}
+ }
+ 
+ void ServerEnvironment::savePlayer(RemotePlayer *player)
+ {
+-	std::string players_path = m_path_world + DIR_DELIM "players";
+-	fs::CreateDir(players_path);
+-
+-	player->save(players_path);
++	if (!player)
++		return;
++	Json::Value player_json;
++	player_json << *player;
++	getPlayerStorage().put_json("p." + player->getName(), player_json);
+ }
+ 
+-Player *ServerEnvironment::loadPlayer(const std::string &playername)
++Player * ServerEnvironment::loadPlayer(const std::string &playername)
+ {
+ 	bool newplayer = false;
+ 	bool found = false;
+-	std::string players_path = m_path_world + DIR_DELIM "players" DIR_DELIM;
+-	std::string path = players_path + playername;
++	auto *player = getPlayer(playername);
+ 
+-	RemotePlayer *player = static_cast<RemotePlayer *>(getPlayer(playername.c_str()));
+ 	if (!player) {
+ 		player = new RemotePlayer(m_gamedef, "");
+ 		newplayer = true;
+ 	}
+ 
+-	for (u32 i = 0; i < PLAYER_FILE_ALTERNATE_TRIES; i++) {
+-		//// Open file and deserialize
++	try {
++		Json::Value player_json;
++		getPlayerStorage().get_json("p." + playername, player_json);
++		verbosestream<<"Reading kv player "<<playername<<std::endl;
++		if (!player_json.empty()) {
++			player_json >> *player;
++			if (newplayer) {
++				addPlayer(player);
++			}
++			return player;
++		}
++	} catch (...)  {
++	}
++
++	//TODO: REMOVE OLD SAVE TO FILE:
++
++	if(!string_allowed(playername, PLAYERNAME_ALLOWED_CHARS) || !playername.size()) {
++		infostream<<"Not loading player with invalid name: "<<playername<<std::endl;
++		if (newplayer)
++			delete player;
++		return nullptr;
++	}
++
++	std::string players_path = m_path_world + DIR_DELIM "players" DIR_DELIM;
++
++	std::string path = players_path + playername;
++		// Open file and deserialize
+ 		std::ifstream is(path.c_str(), std::ios_base::binary);
+-		if (!is.good())
+-			continue;
++		if (!is.good()) {
++			if (newplayer)
++				delete player;
++			return NULL;
++		}
++		try {
+ 		player->deSerialize(is, path);
++		} catch (SerializationError e) {
++			errorstream<<e.what()<<std::endl;
++			if (newplayer)
++				delete player;
++			return nullptr;
++		}
+ 		is.close();
+-
+ 		if (player->getName() == playername) {
+ 			found = true;
+-			break;
+ 		}
+-
+-		path = players_path + playername + itos(i);
+-	}
+-
+ 	if (!found) {
+ 		infostream << "Player file for player " << playername
+ 				<< " not found" << std::endl;
+@@ -726,7 +827,6 @@
+ 
+ 	if (newplayer)
+ 		addPlayer(player);
+-	player->setModified(false);
+ 	return player;
+ }
+ 
+@@ -750,9 +850,8 @@
+ 
+ 	if(!fs::safeWriteToFile(path, ss.str()))
+ 	{
+-		infostream<<"ServerEnvironment::saveMeta(): Failed to write "
++		errorstream<<"ServerEnvironment::saveMeta(): Failed to write "
+ 				<<path<<std::endl;
+-		throw SerializationError("Couldn't save env meta");
+ 	}
+ }
+ 
+@@ -765,21 +864,25 @@
+ 	if (!is.good()) {
+ 		infostream << "ServerEnvironment::loadMeta(): Failed to open "
+ 				<< path << std::endl;
+-		throw SerializationError("Couldn't load env meta");
++		//throw SerializationError("Couldn't load env meta");
+ 	}
+ 
+ 	Settings args;
+ 
+ 	if (!args.parseConfigLines(is, "EnvArgsEnd")) {
++		errorstream << "ServerEnvironment::loadMeta(): EnvArgsEnd not found! in " << path << std::endl;
++/*
+ 		throw SerializationError("ServerEnvironment::loadMeta(): "
+ 				"EnvArgsEnd not found!");
++*/
+ 	}
+ 
+ 	try {
++		m_game_time_start =
+ 		m_game_time = args.getU64("game_time");
+ 	} catch (SettingNotFoundException &e) {
+ 		// Getting this is crucial, otherwise timestamps are useless
+-		throw SerializationError("Couldn't load env meta game_time");
++		//throw SerializationError("Couldn't load env meta game_time");
+ 	}
+ 
+ 	setTimeOfDay(args.exists("time_of_day") ?
+@@ -813,93 +916,43 @@
+ 	m_lbm_mgr.loadIntroductionTimes("", m_gamedef, m_game_time);
+ }
+ 
+-struct ActiveABM
+-{
+-	ActiveBlockModifier *abm;
+-	int chance;
+-	std::set<content_t> required_neighbors;
+-};
+-
+-class ABMHandler
+-{
+-private:
+-	ServerEnvironment *m_env;
+-	std::map<content_t, std::vector<ActiveABM> > m_aabms;
+-public:
+-	ABMHandler(std::vector<ABMWithState> &abms,
+-			float dtime_s, ServerEnvironment *env,
+-			bool use_timers):
+-		m_env(env)
++	ABMHandler::ABMHandler(ServerEnvironment *env):
++		m_env(env),
++		m_aabms_empty(true)
+ 	{
+-		if(dtime_s < 0.001)
+-			return;
+-		INodeDefManager *ndef = env->getGameDef()->ndef();
+-		for(std::vector<ABMWithState>::iterator
+-				i = abms.begin(); i != abms.end(); ++i) {
+-			ActiveBlockModifier *abm = i->abm;
+-			float trigger_interval = abm->getTriggerInterval();
+-			if(trigger_interval < 0.001)
+-				trigger_interval = 0.001;
+-			float actual_interval = dtime_s;
+-			if(use_timers){
+-				i->timer += dtime_s;
+-				if(i->timer < trigger_interval)
+-					continue;
+-				i->timer -= trigger_interval;
+-				actual_interval = trigger_interval;
+-			}
+-			float chance = abm->getTriggerChance();
+-			if(chance == 0)
+-				chance = 1;
++		m_aabms.fill(nullptr);
++	}
++
++	void ABMHandler::init(std::vector<ABMWithState> &abms) {
++		for(auto & ai: abms){
++			auto i = &ai;
+ 			ActiveABM aabm;
+-			aabm.abm = abm;
+-			if(abm->getSimpleCatchUp()) {
+-				float intervals = actual_interval / trigger_interval;
+-				if(intervals == 0)
+-					continue;
+-				aabm.chance = chance / intervals;
+-				if(aabm.chance == 0)
+-					aabm.chance = 1;
+-			} else {
+-				aabm.chance = chance;
+-			}
+-			// Trigger neighbors
+-			std::set<std::string> required_neighbors_s
+-					= abm->getRequiredNeighbors();
+-			for(std::set<std::string>::iterator
+-					i = required_neighbors_s.begin();
+-					i != required_neighbors_s.end(); ++i)
+-			{
+-				ndef->getIds(*i, aabm.required_neighbors);
+-			}
++			aabm.abmws = i;
+ 			// Trigger contents
+-			std::set<std::string> contents_s = abm->getTriggerContents();
+-			for(std::set<std::string>::iterator
+-					i = contents_s.begin(); i != contents_s.end(); ++i)
+-			{
+-				std::set<content_t> ids;
+-				ndef->getIds(*i, ids);
+-				for(std::set<content_t>::const_iterator k = ids.begin();
+-						k != ids.end(); ++k)
++				for (auto &c : i->trigger_ids)
+ 				{
+-					content_t c = *k;
+-					std::map<content_t, std::vector<ActiveABM> >::iterator j;
+-					j = m_aabms.find(c);
+-					if(j == m_aabms.end()){
+-						std::vector<ActiveABM> aabmlist;
+-						m_aabms[c] = aabmlist;
+-						j = m_aabms.find(c);
++					if (!m_aabms[c]) {
++						m_aabms[c] = new std::vector<ActiveABM>;
++						m_aabms_list.push_back(m_aabms[c]);
+ 					}
+-					j->second.push_back(aabm);
++					m_aabms[c]->push_back(aabm);
++					m_aabms_empty = false;
+ 				}
+-			}
+ 		}
+ 	}
++
++	ABMHandler::
++	~ABMHandler() {
++		for (auto i = m_aabms_list.begin();
++				i != m_aabms_list.end(); ++i)
++			delete *i;
++	}
++
+ 	// Find out how many objects the given block and its neighbours contain.
+ 	// Returns the number of objects in the block, and also in 'wider' the
+ 	// number of objects in the block and all its neighbours. The latter
+ 	// may an estimate if any neighbours are unloaded.
+-	u32 countObjects(MapBlock *block, ServerMap * map, u32 &wider)
++	u32 ABMHandler::countObjects(MapBlock *block, ServerMap * map, u32 &wider)
+ 	{
+ 		wider = 0;
+ 		u32 wider_unknown_count = 0;
+@@ -908,66 +961,122 @@
+ 		for(s16 z=-1; z<=1; z++)
+ 		{
+ 			MapBlock *block2 = map->getBlockNoCreateNoEx(
+-					block->getPos() + v3s16(x,y,z));
++					block->getPos() + v3s16(x,y,z), true);
+ 			if(block2==NULL){
+ 				wider_unknown_count++;
+ 				continue;
+ 			}
++			auto lock = block2->m_static_objects.m_active.lock_shared_rec();
+ 			wider += block2->m_static_objects.m_active.size()
+ 					+ block2->m_static_objects.m_stored.size();
+ 		}
+ 		// Extrapolate
+ 		u32 active_object_count = block->m_static_objects.m_active.size();
+ 		u32 wider_known_count = 3*3*3 - wider_unknown_count;
++		if (wider_known_count)
+ 		wider += wider_unknown_count * wider / wider_known_count;
+ 		return active_object_count;
+-
+ 	}
+-	void apply(MapBlock *block)
++
++	void ABMHandler::apply(MapBlock *block, bool activate)
+ 	{
+-		if(m_aabms.empty())
++		if(m_aabms_empty)
+ 			return;
+ 
++		//infostream<<"ABMHandler::apply p="<<block->getPos()<<" block->abm_triggers="<<block->abm_triggers<<std::endl;
++		{
++			std::lock_guard<Mutex> lock(block->abm_triggers_mutex);
++			if (block->abm_triggers)
++				block->abm_triggers->clear();
++		}
++
++#if ENABLE_THREADS
++		auto map = std::unique_ptr<VoxelManipulator> (new VoxelManipulator);
++		{
++			//ScopeProfiler sp(g_profiler, "ABM copy", SPT_ADD);
++			m_env->getServerMap().copy_27_blocks_to_vm(block, *map);
++		}
++#else
+ 		ServerMap *map = &m_env->getServerMap();
++#endif
++
++		{
++		//auto lock = block->try_lock_unique_rec();
++		//if (!lock->owns_lock())
++		//	return;
++		}
++
++		ScopeProfiler sp(g_profiler, "ABM select", SPT_ADD);
++
+ 
+ 		u32 active_object_count_wider;
+-		u32 active_object_count = this->countObjects(block, map, active_object_count_wider);
++		u32 active_object_count = this->countObjects(block, &m_env->getServerMap(), active_object_count_wider);
+ 		m_env->m_added_objects = 0;
+ 
++		auto *ndef = m_env->getGameDef()->ndef();
++
++#if !ENABLE_THREADS
++		auto lock_map = m_env->getServerMap().m_nothread_locker.try_lock_shared_rec();
++		if (!lock_map->owns_lock())
++			return;
++#endif
++
++		int heat_num = 0;
++		int heat_sum = 0;
++
++		v3POS bpr = block->getPosRelative();
+ 		v3s16 p0;
+ 		for(p0.X=0; p0.X<MAP_BLOCKSIZE; p0.X++)
+ 		for(p0.Y=0; p0.Y<MAP_BLOCKSIZE; p0.Y++)
+ 		for(p0.Z=0; p0.Z<MAP_BLOCKSIZE; p0.Z++)
+ 		{
+-			MapNode n = block->getNodeNoEx(p0);
++			v3POS p = p0 + bpr;
++#if ENABLE_THREADS
++			MapNode n = map->getNodeTry(p);
++#else
++			MapNode n = block->getNodeTry(p0);
++#endif
+ 			content_t c = n.getContent();
+-			v3s16 p = p0 + block->getPosRelative();
+-
+-			std::map<content_t, std::vector<ActiveABM> >::iterator j;
+-			j = m_aabms.find(c);
+-			if(j == m_aabms.end())
++			if (c == CONTENT_IGNORE)
+ 				continue;
+ 
+-			for(std::vector<ActiveABM>::iterator
+-					i = j->second.begin(); i != j->second.end(); ++i) {
+-				if(myrand() % i->chance != 0)
+-					continue;
++			{
++				int hot = ((ItemGroupList) ndef->get(n).groups)["hot"];
++				//todo: int cold = ((ItemGroupList) ndef->get(n).groups)["cold"];
++				//also humidity todo.
++				if (hot) {
++					++heat_num;
++					heat_sum += hot;
++				}
++			}
++
++			if (!m_aabms[c]) {
++				if (block->content_only != CONTENT_IGNORE)
++					return;
++				continue;
++			}
+ 
++			for(auto & ir: *(m_aabms[c])) {
++				auto i = &ir;
+ 				// Check neighbors
+-				if(!i->required_neighbors.empty())
++				v3POS neighbor_pos;
++				auto & required_neighbors = activate ? ir.abmws->required_neighbors_activate : ir.abmws->required_neighbors;
++				if(required_neighbors.count() > 0)
+ 				{
+ 					v3s16 p1;
+-					for(p1.X = p.X-1; p1.X <= p.X+1; p1.X++)
+-					for(p1.Y = p.Y-1; p1.Y <= p.Y+1; p1.Y++)
+-					for(p1.Z = p.Z-1; p1.Z <= p.Z+1; p1.Z++)
++					int neighbors_range = i->abmws->neighbors_range;
++					for(p1.X = p.X - neighbors_range; p1.X <= p.X + neighbors_range; ++p1.X)
++					for(p1.Y = p.Y - neighbors_range; p1.Y <= p.Y + neighbors_range; ++p1.Y)
++					for(p1.Z = p.Z - neighbors_range; p1.Z <= p.Z + neighbors_range; ++p1.Z)
+ 					{
+ 						if(p1 == p)
+ 							continue;
+-						MapNode n = map->getNodeNoEx(p1);
++						MapNode n = map->getNodeTry(p1);
+ 						content_t c = n.getContent();
+-						std::set<content_t>::const_iterator k;
+-						k = i->required_neighbors.find(c);
+-						if(k != i->required_neighbors.end()){
++						if (c == CONTENT_IGNORE)
++							continue;
++						if(required_neighbors.get(c)){
++							neighbor_pos = p1;
+ 							goto neighbor_found;
+ 						}
+ 					}
+@@ -976,20 +1085,138 @@
+ 				}
+ neighbor_found:
+ 
+-				// Call all the trigger variations
+-				i->abm->trigger(m_env, p, n);
+-				i->abm->trigger(m_env, p, n,
+-						active_object_count, active_object_count_wider);
++				std::lock_guard<Mutex> lock(block->abm_triggers_mutex);
++
++				if (!block->abm_triggers)
++					block->abm_triggers = std::unique_ptr<MapBlock::abm_triggers_type>(new MapBlock::abm_triggers_type); // c++14: make_unique here
++
++				block->abm_triggers->emplace_back(abm_trigger_one{i, p, c, active_object_count, active_object_count_wider, neighbor_pos, activate});
++			}
++		}
++		if (heat_num) {
++			float heat_avg = heat_sum/heat_num;
++			const int min = 2 * MAP_BLOCKSIZE;
++			float magic = heat_avg >= 1 ? min+(1024-min)/(4096/heat_avg) : min;
++			float heat_add = ((block->heat < 0 ? -block->heat : 0) + heat_avg) * (heat_num < magic ? heat_num/magic : 1);
++			if (block->heat > heat_add) {
++				block->heat_add = 0;
++			} else if (block->heat + heat_add > heat_avg)  {
++				block->heat_add = heat_avg - block->heat;
++			} else {
++				block->heat_add = heat_add;
++			}
++			//infostream<<"heat_num=" << heat_num << " heat_sum="<<heat_sum<<" heat_add="<<heat_add << " bheat_add"<<block->heat_add<< " heat_avg="<<heat_avg << " heatnow="<<block->heat<< " magic="<<magic << std::endl;
++		}
++
++	//infostream<<"ABMHandler::apply reult p="<<block->getPos()<<" apply result:"<< (block->abm_triggers ? block->abm_triggers->size() : 0) <<std::endl;
++
++	}
++
++void MapBlock::abmTriggersRun(ServerEnvironment * m_env, u32 time, bool activate) {
++		ScopeProfiler sp(g_profiler, "ABM trigger blocks", SPT_ADD);
++
++		std::unique_lock<Mutex> lock(abm_triggers_mutex, std::try_to_lock);
++		if (!lock.owns_lock())
++			return;
++
++		if (!abm_triggers)
++			return;
++
++		ServerMap *map = &m_env->getServerMap();
++
++#if !ENABLE_THREADS
++		auto lock_map = m_env->getServerMap().m_nothread_locker.try_lock_shared_rec();
++		if (!lock_map->owns_lock())
++			return;
++#endif
++
++		float dtime = 0;
++		if (m_abm_timestamp) {
++			dtime = time - m_abm_timestamp;
++		} else {
++			u32 ts = getActualTimestamp();
++			if (ts)
++				dtime = time - ts;
++			else
++				dtime = 1;
++		}
++		if (!dtime)
++			dtime = 1;
++
++		unordered_map_v3POS<int> active_object_added;
++
++		//infostream<<"MapBlock::abmTriggersRun " << " abm_triggers="<<abm_triggers.get()<<" size()="<<abm_triggers->size()<<" time="<<time<<" dtime="<<dtime<<" activate="<<activate<<std::endl;
++		m_abm_timestamp = time;
++		for (auto abm_trigger = abm_triggers->begin(); abm_trigger != abm_triggers->end() ; ++abm_trigger) {
++			//ScopeProfiler sp2(g_profiler, "ABM trigger nodes test", SPT_ADD);
++			auto & abm = abm_trigger->abm;
++			if (!abm || !abm->abmws || !abm->abmws->interval) {
++				infostream << "remove strange abm trigger dtime=" << dtime << std::endl;
++				abm_trigger = abm_triggers->erase(abm_trigger);
++				continue;
++			}
++			float intervals = dtime / abm->abmws->interval;
++
++			if(!abm->abmws->simple_catchup)
++				intervals = 1;
++
++			if (!intervals) {
++				verbosestream << "abm: intervals=" << intervals << " dtime="<<dtime<< std::endl;
++				intervals = 1;
++			}
++			int chance = (abm->abmws->chance / intervals);
++			//infostream<<"TST: dtime="<<dtime<<" Achance="<<abm->abmws->chance<<" Ainterval="<<abm->abmws->interval<< " Rchance="<<chance<<" Rintervals="<<intervals << std::endl;
++
++			if(chance && myrand() % chance)
++					continue;
++			//infostream<<"HIT! dtime="<<dtime<<" Achance="<<abm->abmws->chance<<" Ainterval="<<abm->abmws->interval<< " Rchance="<<chance<<" Rintervals="<<intervals << std::endl;
++
++			MapNode node = map->getNodeTry(abm_trigger->pos);
++			if (node.getContent() != abm_trigger->content) {
++				if (node)
++					abm_trigger = abm_triggers->erase(abm_trigger);
++				continue;
++			}
++			//ScopeProfiler sp3(g_profiler, "ABM trigger nodes call", SPT_ADD);
++			v3POS blockpos = getNodeBlockPos(abm_trigger->pos);
++			int active_object_add = 0;
++			if (active_object_added.count(blockpos))
++				active_object_add = active_object_added[blockpos];
++			abm->abmws->abm->trigger(m_env, abm_trigger->pos, node,
++				abm_trigger->active_object_count+active_object_add, abm_trigger->active_object_count_wider+active_object_add, map->getNodeTry(abm_trigger->neighbor_pos), activate);
+ 
+ 				// Count surrounding objects again if the abms added any
++				//infostream<<" m_env->m_added_objects="<<m_env->m_added_objects<<" add="<<active_object_add<<" bp="<<getNodeBlockPos(abm_trigger->pos)<<std::endl;
+ 				if(m_env->m_added_objects > 0) {
+-					active_object_count = countObjects(block, map, active_object_count_wider);
++					MapBlock * block = map->getBlock(blockpos);
++					if (block) {
++						auto was = abm_trigger->active_object_count;
++						abm_trigger->active_object_count = m_env->m_abmhandler.countObjects(block, map, abm_trigger->active_object_count_wider);
++						//infostream<<" was="<<was<<" now abm_trigger->active_object_count="<<abm_trigger->active_object_count<<std::endl;
++						if (abm_trigger->active_object_count > was)
++							active_object_added[blockpos] = abm_trigger->active_object_count - was;
++					}
+ 					m_env->m_added_objects = 0;
+ 				}
+-			}
+ 		}
++		if (abm_triggers->empty())
++			abm_triggers.reset();
++}
++
++void ServerEnvironment::analyzeBlock(MapBlock * block) {
++	u32 block_timestamp = block->getActualTimestamp();
++	if (block->m_next_analyze_timestamp > block_timestamp) {
++		//infostream<<"not anlalyzing: "<< block->getPos() <<"ats="<<block->m_next_analyze_timestamp<< " bts="<<  block_timestamp<<std::endl;
++		return;
+ 	}
+-};
++	ScopeProfiler sp(g_profiler, "ABM analyze", SPT_ADD);
++	block->analyzeContent();
++	bool activate = block_timestamp - block->m_next_analyze_timestamp > 3600;
++	m_abmhandler.apply(block, activate);
++	//infostream<<"ServerEnvironment::analyzeBlock p="<<block->getPos()<< " tdiff="<<block_timestamp - block->m_next_analyze_timestamp <<" co="<<block->content_only <<" triggers="<<(block->abm_triggers ? block->abm_triggers->size() : -1) <<std::endl;
++	block->m_next_analyze_timestamp = block_timestamp + 2;
++}
++
+ 
+ void ServerEnvironment::activateBlock(MapBlock *block, u32 additional_dtime)
+ {
+@@ -1026,6 +1253,9 @@
+ 	// Activate stored objects
+ 	activateObjects(block, dtime_s);
+ 
++//	// Calculate weather conditions
++//	m_map->updateBlockHeat(this, block->getPos() *  MAP_BLOCKSIZE, block);
++
+ 	/* Handle LoadingBlockModifiers */
+ 	m_lbm_mgr.applyLBMs(this, block, stamp);
+ 
+@@ -1043,15 +1273,11 @@
+ 				block->setNodeTimer(NodeTimer(i->timeout, 0, i->position));
+ 		}
+ 	}
+-
+-	/* Handle ActiveBlockModifiers */
+-	ABMHandler abmhandler(m_abms, dtime_s, this, false);
+-	abmhandler.apply(block);
+ }
+ 
+ void ServerEnvironment::addActiveBlockModifier(ActiveBlockModifier *abm)
+ {
+-	m_abms.push_back(ABMWithState(abm));
++	m_abms.push_back(ABMWithState(abm, this));
+ }
+ 
+ void ServerEnvironment::addLoadingBlockModifierDef(LoadingBlockModifierDef *lbm)
+@@ -1059,7 +1285,7 @@
+ 	m_lbm_mgr.addLBMDef(lbm);
+ }
+ 
+-bool ServerEnvironment::setNode(v3s16 p, const MapNode &n)
++bool ServerEnvironment::setNode(v3s16 p, const MapNode &n, s16 fast)
+ {
+ 	INodeDefManager *ndef = m_gamedef->ndef();
+ 	MapNode n_old = m_map->getNodeNoEx(p);
+@@ -1069,8 +1295,24 @@
+ 		m_script->node_on_destruct(p, n_old);
+ 
+ 	// Replace node
++
++	if (fast) {
++		try {
++			MapNode nn = n;
++			if (fast == 2 && !nn.param1) {
++				if (n_old.param1)
++					nn.param1 = n_old.param1;
++				else if (p.Y > 0)
++					nn.param1 = 5; // will be recalculated by next light step
++			}
++			m_map->setNode(p, nn);
++		} catch(InvalidPositionException &e) { }
++	} else {
+ 	if (!m_map->addNodeWithEvent(p, n))
+ 		return false;
++	}
++
++	m_circuit.addNode(p);
+ 
+ 	// Update active VoxelManipulator if a mapgen thread
+ 	m_map->updateVManip(p);
+@@ -1086,7 +1328,7 @@
+ 	return true;
+ }
+ 
+-bool ServerEnvironment::removeNode(v3s16 p)
++bool ServerEnvironment::removeNode(v3s16 p, s16 fast)
+ {
+ 	INodeDefManager *ndef = m_gamedef->ndef();
+ 	MapNode n_old = m_map->getNodeNoEx(p);
+@@ -1097,8 +1339,19 @@
+ 
+ 	// Replace with air
+ 	// This is slightly optimized compared to addNodeWithEvent(air)
++	if (fast) {
++		MapNode n(CONTENT_AIR);
++		try {
++			if (fast == 2)
++				n.param1 = n_old.param1;
++			m_map->setNode(p, n);
++		} catch(InvalidPositionException &e) { }
++	} else {
+ 	if (!m_map->removeNodeWithEvent(p))
+ 		return false;
++	}
++
++	m_circuit.removeNode(p, n_old);
+ 
+ 	// Update active VoxelManipulator if a mapgen thread
+ 	m_map->updateVManip(p);
+@@ -1113,8 +1366,11 @@
+ 
+ bool ServerEnvironment::swapNode(v3s16 p, const MapNode &n)
+ {
++	//INodeDefManager *ndef = m_gamedef->ndef();
++	MapNode n_old = m_map->getNodeNoEx(p);
+ 	if (!m_map->addNodeWithEvent(p, n, false))
+ 		return false;
++	m_circuit.swapNode(p, n_old, n);
+ 
+ 	// Update active VoxelManipulator if a mapgen thread
+ 	m_map->updateVManip(p);
+@@ -1124,17 +1380,29 @@
+ 
+ void ServerEnvironment::getObjectsInsideRadius(std::vector<u16> &objects, v3f pos, float radius)
+ {
+-	for(std::map<u16, ServerActiveObject*>::iterator
++	int obj_null = 0, obj_count = 0;
++	auto lock = m_active_objects.lock_shared_rec();
++	for(auto
+ 			i = m_active_objects.begin();
+ 			i != m_active_objects.end(); ++i)
+ 	{
++		++obj_count;
+ 		ServerActiveObject* obj = i->second;
++		if (!obj) {
++			++obj_null;
++			continue;
++		}
+ 		u16 id = i->first;
++		if (obj->m_removed || obj->m_pending_deactivation)
++			continue;
++
+ 		v3f objectpos = obj->getBasePosition();
+ 		if(objectpos.getDistanceFrom(pos) > radius)
+ 			continue;
+ 		objects.push_back(id);
+ 	}
++	if (obj_null)
++		infostream<<"ServerEnvironment::getObjectsInsideRadius(): "<<"got null objects: "<<obj_null<<"/"<<obj_count<<std::endl;
+ }
+ 
+ void ServerEnvironment::clearObjects(ClearObjectsMode mode)
+@@ -1142,7 +1410,9 @@
+ 	infostream << "ServerEnvironment::clearObjects(): "
+ 		<< "Removing all active objects" << std::endl;
+ 	std::vector<u16> objects_to_remove;
+-	for (std::map<u16, ServerActiveObject*>::iterator
++	auto lock = m_active_objects.lock_unique_rec();
++
++	for( auto
+ 			i = m_active_objects.begin();
+ 			i != m_active_objects.end(); ++i) {
+ 		ServerActiveObject* obj = i->second;
+@@ -1215,7 +1485,8 @@
+ 			i != loaded_blocks.end(); ++i) {
+ 		v3s16 p = *i;
+ 		MapBlock *block = m_map->getBlockNoCreateNoEx(p);
+-		assert(block != NULL);
++		if (!block)
++			continue;
+ 		block->refGrab();
+ 	}
+ 
+@@ -1270,7 +1541,8 @@
+ 			i != loaded_blocks.end(); ++i) {
+ 		v3s16 p = *i;
+ 		MapBlock *block = m_map->getBlockNoCreateNoEx(p);
+-		assert(block);
++		if (!block)
++			continue;
+ 		block->refDrop();
+ 	}
+ 
+@@ -1281,11 +1553,12 @@
+ 		<< " in " << num_blocks_cleared << " blocks" << std::endl;
+ }
+ 
+-void ServerEnvironment::step(float dtime)
++void ServerEnvironment::step(float dtime, float uptime, unsigned int max_cycle_ms)
+ {
+ 	DSTACK(FUNCTION_NAME);
+ 
+ 	//TimeTaker timer("ServerEnv step");
++	ScopeProfiler sp(g_profiler, "SEnv: step", SPT_AVG);
+ 
+ 	/* Step time of day */
+ 	stepTimeOfDay(dtime);
+@@ -1293,8 +1566,10 @@
+ 	// Update this one
+ 	// NOTE: This is kind of funny on a singleplayer game, but doesn't
+ 	// really matter that much.
++/*
+ 	static const float server_step = g_settings->getFloat("dedicated_server_step");
+ 	m_recommended_send_interval = server_step;
++*/
+ 
+ 	/*
+ 		Increment game time
+@@ -1306,18 +1581,25 @@
+ 		m_game_time_fraction_counter -= (float)inc_i;
+ 	}
+ 
++	TimeTaker timer_step("Environment step");
++#if ENABLE_THREADS
++	g_profiler->add("SMap: Blocks", getMap().m_blocks.size());
++#endif
++
+ 	/*
+ 		Handle players
+ 	*/
+ 	{
+-		ScopeProfiler sp(g_profiler, "SEnv: handle players avg", SPT_AVG);
+-		for(std::vector<Player*>::iterator i = m_players.begin();
++		//TimeTaker timer_step_player("player step");
++		//ScopeProfiler sp(g_profiler, "SEnv: handle players avg", SPT_AVG);
++		auto lock = m_players.lock_shared_rec();
++		for(auto i = m_players.begin();
+ 				i != m_players.end(); ++i)
+ 		{
+ 			Player *player = *i;
+ 
+ 			// Ignore disconnected players
+-			if(player->peer_id == 0)
++			if(!player || player->peer_id == 0)
+ 				continue;
+ 
+ 			// Move
+@@ -1326,10 +1608,23 @@
+ 	}
+ 
+ 	/*
++	 * Update circuit
++	 */
++	m_circuit.update(dtime);
++
++#if !ENABLE_THREADS
++		auto lockmap = m_map->m_nothread_locker.try_lock_unique_rec();
++		if (!lockmap->owns_lock())
++			return;
++#endif
++
++	/*
+ 		Manage active block list
+ 	*/
+-	if (m_active_blocks_management_interval.step(dtime, m_cache_active_block_mgmt_interval)) {
++	if(m_blocks_added_last || m_active_blocks_management_interval.step(dtime, m_cache_active_block_mgmt_interval)) {
++		//TimeTaker timer_s1("Manage active block list");
+ 		ScopeProfiler sp(g_profiler, "SEnv: manage act. block list avg per interval", SPT_AVG);
++		if (!m_blocks_added_last) {
+ 		/*
+ 			Get player block positions
+ 		*/
+@@ -1339,22 +1634,43 @@
+ 				i != m_players.end(); ++i) {
+ 			Player *player = *i;
+ 			// Ignore disconnected players
+-			if(player->peer_id == 0)
++			if(!player || player->peer_id == 0)
+ 				continue;
+ 
+ 			v3s16 blockpos = getNodeBlockPos(
+ 					floatToInt(player->getPosition(), BS));
+ 			players_blockpos.push_back(blockpos);
+ 		}
++		if (!m_blocks_added_last && g_settings->getBool("enable_force_load")) {
++			//TimeTaker timer_s2("force load");
++			auto lock = m_active_objects.try_lock_shared_rec();
++			if (lock->owns_lock())
++			for(auto
++				i = m_active_objects.begin();
++				i != m_active_objects.end(); ++i)
++			{
++				ServerActiveObject* obj = i->second;
++				if(!obj || obj->getType() == ACTIVEOBJECT_TYPE_PLAYER)
++					continue;
++				ObjectProperties* props = obj->accessObjectProperties();
++				if (!props)
++					continue;
++				if(props->force_load){
++					v3f objectpos = obj->getBasePosition();
++					v3s16 blockpos = getNodeBlockPos(
++					floatToInt(objectpos, BS));
++					players_blockpos.push_back(blockpos);
++				}
++			}
++		}
+ 
+ 		/*
+ 			Update list of active blocks, collecting changes
+ 		*/
+ 		static const s16 active_block_range = g_settings->getS16("active_block_range");
+ 		std::set<v3s16> blocks_removed;
+-		std::set<v3s16> blocks_added;
+ 		m_active_blocks.update(players_blockpos, active_block_range,
+-				blocks_removed, blocks_added);
++				blocks_removed, m_blocks_added);
+ 
+ 		/*
+ 			Handle removed blocks
+@@ -1363,32 +1679,18 @@
+ 		// Convert active objects that are no more in active blocks to static
+ 		deactivateFarObjects(false);
+ 
+-		for(std::set<v3s16>::iterator
+-				i = blocks_removed.begin();
+-				i != blocks_removed.end(); ++i) {
+-			v3s16 p = *i;
+-
+-			/* infostream<<"Server: Block " << PP(p)
+-				<< " became inactive"<<std::endl; */
+-
+-			MapBlock *block = m_map->getBlockNoCreateNoEx(p);
+-			if(block==NULL)
+-				continue;
+-
+-			// Set current time as timestamp (and let it set ChangedFlag)
+-			block->setTimestamp(m_game_time);
+-		}
++		} // if (!m_blocks_added_last)
+ 
+ 		/*
+ 			Handle added blocks
+ 		*/
+ 
+-		for(std::set<v3s16>::iterator
+-				i = blocks_added.begin();
+-				i != blocks_added.end(); ++i)
+-		{
++		u32 n = 0, end_ms = porting::getTimeMs() + max_cycle_ms;
++		m_blocks_added_last = 0;
++		auto i = m_blocks_added.begin();
++		for(; i != m_blocks_added.end(); ++i) {
++			++n;
+ 			v3s16 p = *i;
+-
+ 			MapBlock *block = m_map->getBlockOrEmerge(p);
+ 			if(block==NULL){
+ 				m_active_blocks.m_list.erase(p);
+@@ -1398,27 +1700,45 @@
+ 			activateBlock(block);
+ 			/* infostream<<"Server: Block " << PP(p)
+ 				<< " became active"<<std::endl; */
++			if (porting::getTimeMs() > end_ms) {
++				m_blocks_added_last = n;
++				break;
++			}
+ 		}
++		m_blocks_added.erase(m_blocks_added.begin(), i);
+ 	}
+ 
++	if (!m_more_threads)
++		analyzeBlocks(dtime, max_cycle_ms);
++
+ 	/*
+ 		Mess around in active blocks
+ 	*/
+-	if (m_active_blocks_nodemetadata_interval.step(dtime, m_cache_nodetimer_interval)) {
+-		ScopeProfiler sp(g_profiler, "SEnv: mess in act. blocks avg per interval", SPT_AVG);
+-
+-		float dtime = m_cache_nodetimer_interval;
+-
+-		for(std::set<v3s16>::iterator
++	if(m_active_block_timer_last || m_active_blocks_nodemetadata_interval.step(dtime, m_cache_nodetimer_interval)) {
++		//if (!m_active_block_timer_last) infostream<<"Start ABM timer cycle s="<<m_active_blocks.m_list.size()<<std::endl;
++		//TimeTaker timer_s1("Mess around in active blocks");
++		//ScopeProfiler sp(g_profiler, "SEnv: mess in act. blocks avg per interval", SPT_AVG);
++
++		//float dtime = m_cache_nodetimer_interval;
++
++		u32 n = 0, calls = 0, end_ms = porting::getTimeMs() + max_cycle_ms;
++		auto lock = m_active_blocks.m_list.lock_shared_rec();
++		for(auto
+ 				i = m_active_blocks.m_list.begin();
+ 				i != m_active_blocks.m_list.end(); ++i)
+ 		{
+-			v3s16 p = *i;
++			if (n++ < m_active_block_timer_last)
++				continue;
++			else
++				m_active_block_timer_last = 0;
++			++calls;
++
++			v3POS p = i->first;
+ 
+ 			/*infostream<<"Server: Block ("<<p.X<<","<<p.Y<<","<<p.Z
+ 					<<") being handled"<<std::endl;*/
+ 
+-			MapBlock *block = m_map->getBlockNoCreateNoEx(p);
++			MapBlock *block = m_map->getBlockNoCreateNoEx(p, true);
+ 			if(block==NULL)
+ 				continue;
+ 
+@@ -1429,13 +1749,19 @@
+ 			block->setTimestampNoChangedFlag(m_game_time);
+ 			// If time has changed much from the one on disk,
+ 			// set block to be saved when it is unloaded
++/*
+ 			if(block->getTimestamp() > block->getDiskTimestamp() + 60)
+ 				block->raiseModified(MOD_STATE_WRITE_AT_UNLOAD,
+ 					MOD_REASON_BLOCK_EXPIRED);
++*/
+ 
+ 			// Run node timers
++			if (!block->m_node_timers.m_uptime_last)  // not very good place, but minimum modifications
++				block->m_node_timers.m_uptime_last = uptime - dtime;
+ 			std::vector<NodeTimer> elapsed_timers =
+-				block->m_node_timers.step((float)dtime);
++				//block->m_node_timers.step((float)dtime);
++				block->m_node_timers.step(uptime - block->m_node_timers.m_uptime_last);
++			block->m_node_timers.m_uptime_last = uptime;
+ 			if (!elapsed_timers.empty()) {
+ 				MapNode n;
+ 				for (std::vector<NodeTimer>::iterator
+@@ -1449,65 +1775,118 @@
+ 					}
+ 				}
+ 			}
++
++			if (porting::getTimeMs() > end_ms) {
++				m_active_block_timer_last = n;
++				break;
+ 		}
+ 	}
++		if (!calls)
++			m_active_block_timer_last = 0;
++	}
++
++	g_profiler->add("SMap: Blocks: Active", m_active_blocks.m_list.size());
++	m_active_block_abm_dtime_counter += dtime;
+ 
+-	if (m_active_block_modifier_interval.step(dtime, m_cache_abm_interval))
++	if(m_active_block_abm_last || m_active_block_modifier_interval.step(dtime, m_cache_abm_interval)) {
++		/*
+ 	do{ // breakable
+ 		if(m_active_block_interval_overload_skip > 0){
+ 			ScopeProfiler sp(g_profiler, "SEnv: ABM overload skips");
+ 			m_active_block_interval_overload_skip--;
+ 			break;
+ 		}
++		*/
+ 		ScopeProfiler sp(g_profiler, "SEnv: modify in blocks avg per interval", SPT_AVG);
+ 		TimeTaker timer("modify in active blocks per interval");
+ 
++		/*
+ 		// Initialize handling of ActiveBlockModifiers
+ 		ABMHandler abmhandler(m_abms, m_cache_abm_interval, this, true);
+-
+-		for(std::set<v3s16>::iterator
++		*/
++		u32 n = 0, calls = 0, end_ms = porting::getTimeMs() + max_cycle_ms;
++		auto lock = m_active_blocks.m_list.lock_shared_rec();
++		for(auto
+ 				i = m_active_blocks.m_list.begin();
+ 				i != m_active_blocks.m_list.end(); ++i)
+ 		{
+-			v3s16 p = *i;
++			if (n++ < m_active_block_abm_last)
++				continue;
++			else
++				m_active_block_abm_last = 0;
++			++calls;
++
++			ScopeProfiler sp(g_profiler, "SEnv: ABM one block avg", SPT_AVG);
++
++			v3POS p = i->first;
+ 
+ 			/*infostream<<"Server: Block ("<<p.X<<","<<p.Y<<","<<p.Z
+ 					<<") being handled"<<std::endl;*/
+ 
+-			MapBlock *block = m_map->getBlockNoCreateNoEx(p);
+-			if(block == NULL)
++			MapBlock *block = m_map->getBlock(p, true, true);
++			if (!block)
+ 				continue;
+ 
+ 			// Set current time as timestamp
+ 			block->setTimestampNoChangedFlag(m_game_time);
+ 
+ 			/* Handle ActiveBlockModifiers */
+-			abmhandler.apply(block);
++			block->abmTriggersRun(this, m_game_time);
++
++			if (porting::getTimeMs() > end_ms) {
++				m_active_block_abm_last = n;
++				break;
++			}
+ 		}
++		if (!calls)
++			m_active_block_abm_last = 0;
+ 
+-		u32 time_ms = timer.stop(true);
+-		u32 max_time_ms = 200;
+-		if(time_ms > max_time_ms){
+-			warningstream<<"active block modifiers took "
+-					<<time_ms<<"ms (longer than "
+-					<<max_time_ms<<"ms)"<<std::endl;
+-			m_active_block_interval_overload_skip = (time_ms / max_time_ms) + 1;
++/*
++		if(m_active_block_abm_last) {
++			warningstream<<"WARNING: active block modifiers ("
++					<<calls<<"/"<<m_active_blocks.m_list.size()<<" to "<<m_active_block_abm_last<<") took "
++					<<porting::getTimeMs()-end_ms + u32(1000 * m_recommended_send_interval)<<"ms "
++					<<std::endl;
++		}
++*/
++		if (!m_active_block_abm_last) {
++			m_active_block_abm_dtime = m_active_block_abm_dtime_counter;
++			m_active_block_abm_dtime_counter = 0;
+ 		}
+-	}while(0);
++	}
+ 
++	{
++	TimeTaker timer("contrib_globalstep");
++	contrib_globalstep(dtime);
++	}
+ 	/*
+ 		Step script environment (run global on_step())
+ 	*/
++	{
++	ScopeProfiler sp(g_profiler, "SEnv: environment_Step AVG", SPT_AVG);
++	TimeTaker timer("environment_Step");
+ 	m_script->environment_Step(dtime);
+-
++	}
+ 	/*
+ 		Step active objects
+ 	*/
+ 	{
+-		ScopeProfiler sp(g_profiler, "SEnv: step act. objs avg", SPT_AVG);
++		//ScopeProfiler sp(g_profiler, "SEnv: step act. objs avg", SPT_AVG);
+ 		//TimeTaker timer("Step active objects");
+ 
+-		g_profiler->avg("SEnv: num of objects", m_active_objects.size());
++	std::vector<ServerActiveObject*> objects;
++	{
++		auto lock = m_active_objects.try_lock_shared_rec();
++		if (lock->owns_lock()) {
++			for(auto & ir : m_active_objects) {
++				objects.emplace_back(ir.second);
++			}
++		}
++	}
++
++	if (objects.size())
++	{
++		g_profiler->add("SEnv: Objects", objects.size());
+ 
+ 		// This helps the objects to send data at the same time
+ 		bool send_recommended = false;
+@@ -1515,39 +1894,59 @@
+ 		if(m_send_recommended_timer > getSendRecommendedInterval())
+ 		{
+ 			m_send_recommended_timer -= getSendRecommendedInterval();
++			if (m_send_recommended_timer > getSendRecommendedInterval() * 2) {
++				m_send_recommended_timer = 0;
++			}
+ 			send_recommended = true;
+ 		}
++		u32 n = 0, calls = 0, end_ms = porting::getTimeMs() + max_cycle_ms;
++
++		for(auto & obj : objects) {
++			if (n++ < m_active_objects_last)
++				continue;
++			else
++				m_active_objects_last = 0;
++			++calls;
+ 
+-		for(std::map<u16, ServerActiveObject*>::iterator
+-				i = m_active_objects.begin();
+-				i != m_active_objects.end(); ++i)
+-		{
+-			ServerActiveObject* obj = i->second;
+ 			// Don't step if is to be removed or stored statically
+-			if(obj->m_removed || obj->m_pending_deactivation)
++			if(!obj || obj->m_removed || obj->m_pending_deactivation)
+ 				continue;
+ 			// Step object
+-			obj->step(dtime, send_recommended);
++			if (!obj->m_uptime_last)  // not very good place, but minimum modifications
++				obj->m_uptime_last = uptime - dtime;
++			obj->step(uptime > obj->m_uptime_last ? uptime - obj->m_uptime_last : dtime, send_recommended);
++			obj->m_uptime_last = uptime;
+ 			// Read messages from object
++/*
+ 			while(!obj->m_messages_out.empty())
+ 			{
+ 				m_active_object_messages.push(
+ 						obj->m_messages_out.front());
+ 				obj->m_messages_out.pop();
+ 			}
++*/
++
++			if (porting::getTimeMs() > end_ms) {
++				m_active_objects_last = n;
++				break;
++			}
+ 		}
++		if (!calls)
++			m_active_objects_last = 0;
++	}
+ 	}
+ 
+ 	/*
+ 		Manage active objects
+ 	*/
+-	if(m_object_management_interval.step(dtime, 0.5))
++	if(m_object_management_interval.step(dtime, 5))
+ 	{
+-		ScopeProfiler sp(g_profiler, "SEnv: remove removed objs avg /.5s", SPT_AVG);
++		//TimeTaker timer("Manage active objects");
++		//ScopeProfiler sp(g_profiler, "SEnv: remove removed objs avg /.5s", SPT_AVG);
+ 		/*
+ 			Remove objects that satisfy (m_removed && m_known_by_count==0)
+ 		*/
+-		removeRemovedObjects();
++		removeRemovedObjects(max_cycle_ms);
+ 	}
+ 
+ 	/*
+@@ -1594,17 +1993,102 @@
+ 	m_particle_spawners.erase(id);
+ }
+ 
+-ServerActiveObject* ServerEnvironment::getActiveObject(u16 id)
++int ServerEnvironment::analyzeBlocks(float dtime, unsigned int max_cycle_ms) {
++	u32 n = 0, calls = 0, end_ms = porting::getTimeMs() + max_cycle_ms;
++	if (m_active_block_analyzed_last || m_analyze_blocks_interval.step(dtime, 1.0)) {
++		//if (!m_active_block_analyzed_last) infostream<<"Start ABM analyze cycle s="<<m_active_blocks.m_list.size()<<std::endl;
++		TimeTaker timer("env: block analyze and abm apply from " + itos(m_active_block_analyzed_last));
++
++		std::unordered_map<v3POS, bool, v3POSHash, v3POSEqual> active_blocks_list;
++		//auto active_blocks_list = m_active_blocks.m_list;
++		{
++			auto lock = m_active_blocks.m_list.try_lock_shared_rec();
++			if (lock->owns_lock())
++				active_blocks_list = m_active_blocks.m_list;
++		}
++
++		for(auto i = active_blocks_list.begin(); i != active_blocks_list.end(); ++i)
++		{
++			if (n++ < m_active_block_analyzed_last)
++				continue;
++			else
++				m_active_block_analyzed_last = 0;
++			++calls;
++
++			v3POS p = i->first;
++
++			MapBlock *block = m_map->getBlock(p, true);
++			if(!block)
++				continue;
++
++			analyzeBlock(block);
++
++			if (porting::getTimeMs() > end_ms) {
++				m_active_block_analyzed_last = n;
++				break;
++			}
++		}
++		if (!calls)
++			m_active_block_analyzed_last = 0;
++	}
++
++
++	if (g_settings->getBool("abm_random") && (!m_abm_random_blocks.empty() || m_abm_random_interval.step(dtime, 10.0))) {
++		TimeTaker timer("env: random abm " + itos(m_abm_random_blocks.size()));
++
++		u32 end_ms = porting::getTimeMs() + max_cycle_ms/10;
++
++		if (m_abm_random_blocks.empty()) {
++#if !ENABLE_THREADS
++			auto lock_map = m_map->m_nothread_locker.try_lock_shared_rec();
++			if (lock_map->owns_lock())
++#endif
++			{
++				auto lock = m_map->m_blocks.try_lock_shared_rec();
++				if (lock->owns_lock())
++				for (auto & ir : m_map->m_blocks) {
++					if (!ir.second || !ir.second->abm_triggers)
++						continue;
++					m_abm_random_blocks.emplace_back(ir.first);
++				}
++			}
++			//infostream<<"Start ABM random cycle s="<<m_abm_random_blocks.size()<<std::endl;
++		}
++
++		for (auto i = m_abm_random_blocks.begin(); i != m_abm_random_blocks.end(); ++i) {
++			MapBlock* block = m_map->getBlock(*i, true);
++			i = m_abm_random_blocks.erase(i);
++			//ScopeProfiler sp221(g_profiler, "ABM random look blocks", SPT_ADD);
++
++			if (!block)
++				continue;
++
++			if (!block->abm_triggers)
++				continue;
++			//ScopeProfiler sp354(g_profiler, "ABM random trigger blocks", SPT_ADD);
++			block->abmTriggersRun(this, m_game_time);
++			if (porting::getTimeMs() > end_ms) {
++				break;
++			}
++		}
++	}
++
++	return calls;
++}
++
++ServerActiveObject* ServerEnvironment::getActiveObject(u16 id, bool removed)
+ {
+-	std::map<u16, ServerActiveObject*>::iterator n;
+-	n = m_active_objects.find(id);
++	auto lock = m_active_objects.lock_shared_rec();
++	auto n = m_active_objects.find(id);
+ 	if(n == m_active_objects.end())
+ 		return NULL;
++	if (!removed && (!n->second || n->second->m_removed || n->second->m_pending_deactivation))
++		return NULL;
+ 	return n->second;
+ }
+ 
+ bool isFreeServerActiveObjectId(u16 id,
+-		std::map<u16, ServerActiveObject*> &objects)
++		maybe_concurrent_map<u16, ServerActiveObject*> &objects)
+ {
+ 	if(id == 0)
+ 		return false;
+@@ -1613,8 +2097,9 @@
+ }
+ 
+ u16 getFreeServerActiveObjectId(
+-		std::map<u16, ServerActiveObject*> &objects)
++		maybe_concurrent_map<u16, ServerActiveObject*> &objects)
+ {
++	auto lock = objects.lock_unique_rec();
+ 	//try to reuse id's as late as possible
+ 	static u16 last_used_id = 0;
+ 	u16 startid = last_used_id;
+@@ -1631,7 +2116,8 @@
+ 
+ u16 ServerEnvironment::addActiveObject(ServerActiveObject *object)
+ {
+-	assert(object);	// Pre-condition
++	if (!object)
++		return 0;
+ 	m_added_objects++;
+ 	u16 id = addActiveObjectRaw(object, true, 0);
+ 	return id;
+@@ -1643,7 +2129,7 @@
+ */
+ void ServerEnvironment::getAddedActiveObjects(Player *player, s16 radius,
+ 		s16 player_radius,
+-		std::set<u16> &current_objects,
++		maybe_concurrent_unordered_map<u16, bool> &current_objects_shared,
+ 		std::queue<u16> &added_objects)
+ {
+ 	f32 radius_f = radius * BS;
+@@ -1652,6 +2138,13 @@
+ 	if (player_radius_f < 0)
+ 		player_radius_f = 0;
+ 
++	std::unordered_map<u16, bool> current_objects;
++	{
++		auto lock = current_objects_shared.try_lock_shared_rec();
++		if (!lock->owns_lock())
++			return;
++		current_objects = current_objects_shared;
++	}
+ 	/*
+ 		Go through the object list,
+ 		- discard m_removed objects,
+@@ -1659,7 +2152,12 @@
+ 		- discard objects that are found in current_objects.
+ 		- add remaining objects to added_objects
+ 	*/
+-	for(std::map<u16, ServerActiveObject*>::iterator
++	int count = 0;
++	auto lock = m_active_objects.try_lock_shared_rec();
++	if (!lock->owns_lock())
++		return;
++	auto player_position = player->getPosition();
++	for(auto
+ 			i = m_active_objects.begin();
+ 			i != m_active_objects.end(); ++i) {
+ 		u16 id = i->first;
+@@ -1673,7 +2171,7 @@
+ 		if(object->m_removed || object->m_pending_deactivation)
+ 			continue;
+ 
+-		f32 distance_f = object->getBasePosition().getDistanceFrom(player->getPosition());
++		f32 distance_f = object->getBasePosition().getDistanceFrom(player_position);
+ 		if (object->getType() == ACTIVEOBJECT_TYPE_PLAYER) {
+ 			// Discard if too far
+ 			if (distance_f > player_radius_f && player_radius_f != 0)
+@@ -1682,12 +2180,13 @@
+ 			continue;
+ 
+ 		// Discard if already on current_objects
+-		std::set<u16>::iterator n;
+-		n = current_objects.find(id);
++		auto n = current_objects.find(id);
+ 		if(n != current_objects.end())
+ 			continue;
+ 		// Add to added_objects
+ 		added_objects.push(id);
++		if (++count > 20)
++			break;
+ 	}
+ }
+ 
+@@ -1697,7 +2196,7 @@
+ */
+ void ServerEnvironment::getRemovedActiveObjects(Player *player, s16 radius,
+ 		s16 player_radius,
+-		std::set<u16> &current_objects,
++		maybe_concurrent_unordered_map<u16, bool> &current_objects,
+ 		std::queue<u16> &removed_objects)
+ {
+ 	f32 radius_f = radius * BS;
+@@ -1706,6 +2205,14 @@
+ 	if (player_radius_f < 0)
+ 		player_radius_f = 0;
+ 
++	std::vector<u16> current_objects_vector;
++	{
++		auto lock = current_objects.try_lock_shared_rec();
++		if (!lock->owns_lock())
++			return;
++		for (auto & i : current_objects)
++			current_objects_vector.emplace_back(i.first);
++	}
+ 	/*
+ 		Go through current_objects; object is removed if:
+ 		- object is not found in m_active_objects (this is actually an
+@@ -1714,16 +2221,18 @@
+ 		- object has m_removed=true, or
+ 		- object is too far away
+ 	*/
+-	for(std::set<u16>::iterator
+-			i = current_objects.begin();
+-			i != current_objects.end(); ++i)
++	auto player_position = player->getPosition();
++
++	for(auto
++			i = current_objects_vector.begin();
++			i != current_objects_vector.end(); ++i)
+ 	{
+ 		u16 id = *i;
+-		ServerActiveObject *object = getActiveObject(id);
++		ServerActiveObject *object = getActiveObject(id, true);
+ 
+ 		if (object == NULL) {
+-			infostream << "ServerEnvironment::getRemovedActiveObjects():"
+-				<< " object in current_objects is NULL" << std::endl;
++			//infostream<<"ServerEnvironment::getRemovedActiveObjects():"
++			//		<<" object in current_objects is NULL"<<std::endl;
+ 			removed_objects.push(id);
+ 			continue;
+ 		}
+@@ -1733,7 +2242,7 @@
+ 			continue;
+ 		}
+ 
+-		f32 distance_f = object->getBasePosition().getDistanceFrom(player->getPosition());
++		f32 distance_f = object->getBasePosition().getDistanceFrom(player_position);
+ 		if (object->getType() == ACTIVEOBJECT_TYPE_PLAYER) {
+ 			if (distance_f <= player_radius_f || player_radius_f == 0)
+ 				continue;
+@@ -1777,9 +2286,12 @@
+ 	if(m_active_object_messages.empty())
+ 		return ActiveObjectMessage(0);
+ 
++/*
+ 	ActiveObjectMessage message = m_active_object_messages.front();
+ 	m_active_object_messages.pop();
+ 	return message;
++*/
++	return m_active_object_messages.pop_front();
+ }
+ 
+ /*
+@@ -1789,7 +2301,8 @@
+ u16 ServerEnvironment::addActiveObjectRaw(ServerActiveObject *object,
+ 		bool set_changed, u32 dtime_s)
+ {
+-	assert(object); // Pre-condition
++	if(!object)
++		return 0;
+ 	if(object->getId() == 0){
+ 		u16 new_id = getFreeServerActiveObjectId(m_active_objects);
+ 		if(new_id == 0)
+@@ -1828,12 +2341,16 @@
+ 	/*infostream<<"ServerEnvironment::addActiveObjectRaw(): "
+ 			<<"added (id="<<object->getId()<<")"<<std::endl;*/
+ 
++	m_active_objects.set(object->getId(), object);
++
++/*
+ 	m_active_objects[object->getId()] = object;
+ 
+ 	verbosestream<<"ServerEnvironment::addActiveObjectRaw(): "
+ 			<<"Added id="<<object->getId()<<"; there are now "
+ 			<<m_active_objects.size()<<" active objects."
+ 			<<std::endl;
++*/
+ 
+ 	// Register reference in scripting api (must be done before post-init)
+ 	m_script->addObjectReference(object);
+@@ -1851,9 +2368,12 @@
+ 		v3s16 blockpos = getNodeBlockPos(floatToInt(objectpos, BS));
+ 		MapBlock *block = m_map->emergeBlock(blockpos);
+ 		if(block){
+-			block->m_static_objects.m_active[object->getId()] = s_obj;
++			block->m_static_objects.m_active.set(object->getId(), s_obj);
++			{
++			auto lock = object->lock_unique_rec();
+ 			object->m_static_exists = true;
+ 			object->m_static_block = blockpos;
++			}
+ 
+ 			if(set_changed)
+ 				block->raiseModified(MOD_STATE_WRITE_NEEDED,
+@@ -1872,23 +2392,44 @@
+ /*
+ 	Remove objects that satisfy (m_removed && m_known_by_count==0)
+ */
+-void ServerEnvironment::removeRemovedObjects()
++void ServerEnvironment::removeRemovedObjects(unsigned int max_cycle_ms)
+ {
+-	std::vector<u16> objects_to_remove;
+-	for(std::map<u16, ServerActiveObject*>::iterator
+-			i = m_active_objects.begin();
+-			i != m_active_objects.end(); ++i) {
+-		u16 id = i->first;
+-		ServerActiveObject* obj = i->second;
+-		// This shouldn't happen but check it
+-		if(obj == NULL)
+-		{
+-			infostream<<"NULL object found in ServerEnvironment"
+-					<<" while finding removed objects. id="<<id<<std::endl;
+-			// Id to be removed from m_active_objects
+-			objects_to_remove.push_back(id);
+-			continue;
++	TimeTaker timer("ServerEnvironment::removeRemovedObjects()");
++	//std::list<u16> objects_to_remove;
++
++	{
++		RecursiveMutexAutoLock testscriptlock(getScriptIface()->m_luastackmutex, std::try_to_lock);
++		if (testscriptlock.owns_lock()) {
++			for (auto & o : objects_to_delete)
++				delete o;
++			objects_to_delete.clear();
++		}
++	}
++
++	std::vector<ServerActiveObject*> objects;
++	{
++		auto lock = m_active_objects.try_lock_shared_rec();
++		if (lock->owns_lock()) {
++			for(auto & ir : m_active_objects) {
++				auto obj = ir.second;
++				if (obj) {
++					objects.emplace_back(obj);
++				} else {
++					auto id = ir.first;
++					objects_to_remove.push_back(id);
++				}
++			}
+ 		}
++	}
++
++	u32 end_ms = porting::getTimeMs() + max_cycle_ms;
++	if (objects.size())
++	for (auto & obj : objects)
++	{
++		if(!obj)
++			continue;
++
++		u16 id = obj->getId();
+ 
+ 		/*
+ 			We will delete objects that are marked as removed or thatare
+@@ -1945,17 +2486,28 @@
+ 		m_script->removeObjectReference(obj);
+ 
+ 		// Delete
+-		if(obj->environmentDeletes())
+-			delete obj;
++		if(obj->environmentDeletes()) {
++			m_active_objects.set(id, nullptr);
++			objects_to_delete.push_back(obj);
++		}
+ 
+ 		// Id to be removed from m_active_objects
+ 		objects_to_remove.push_back(id);
++
++		if (porting::getTimeMs() > end_ms)
++			break;
+ 	}
++
++	if (!objects_to_remove.empty()) {
++	auto lock = m_active_objects.lock_unique_rec();
+ 	// Remove references from m_active_objects
+-	for(std::vector<u16>::iterator i = objects_to_remove.begin();
++	for(auto i = objects_to_remove.begin();
+ 			i != objects_to_remove.end(); ++i) {
++		objects_to_delete.push_back(m_active_objects.get(*i));
+ 		m_active_objects.erase(*i);
+ 	}
++	objects_to_remove.clear();
++	}
+ }
+ 
+ static void print_hexdump(std::ostream &o, const std::string &data)
+@@ -2000,14 +2552,17 @@
+ 	if(block == NULL)
+ 		return;
+ 
++	//auto lock = block->m_static_objects.m_active.lock_unique_rec();
++
+ 	// Ignore if no stored objects (to not set changed flag)
+ 	if(block->m_static_objects.m_stored.empty())
+ 		return;
+-
++/*
+ 	verbosestream<<"ServerEnvironment::activateObjects(): "
+ 			<<"activating objects of block "<<PP(block->getPos())
+ 			<<" ("<<block->m_static_objects.m_stored.size()
+ 			<<" objects)"<<std::endl;
++*/
+ 	bool large_amount = (block->m_static_objects.m_stored.size() > g_settings->getU16("max_objects_per_block"));
+ 	if (large_amount) {
+ 		errorstream<<"suspiciously large amount of objects detected: "
+@@ -2028,6 +2583,12 @@
+ 			i != block->m_static_objects.m_stored.end(); ++i) {
+ 		StaticObject &s_obj = *i;
+ 
++		if (!s_obj.type || s_obj.pos.X > MAX_MAP_GENERATION_LIMIT * BS || s_obj.pos.X > MAX_MAP_GENERATION_LIMIT * BS || s_obj.pos.Y > MAX_MAP_GENERATION_LIMIT * BS) {
++			errorstream << "activateObjects broken static object: blockpos="<<block->getPos()<<" type=" << (int)s_obj.type << " p="<<s_obj.pos<<std::endl;
++			break;
++		}
++
++
+ 		// Create an active object from the data
+ 		ServerActiveObject *obj = ServerActiveObject::create
+ 				((ActiveObjectType) s_obj.type, this, 0, s_obj.pos, s_obj.data);
+@@ -2037,14 +2598,17 @@
+ 					<<"failed to create active object from static object "
+ 					<<"in block "<<PP(s_obj.pos/BS)
+ 					<<" type="<<(int)s_obj.type<<" data:"<<std::endl;
++			break;
+ 			print_hexdump(verbosestream, s_obj.data);
+ 
+ 			new_stored.push_back(s_obj);
+ 			continue;
+ 		}
++/*
+ 		verbosestream<<"ServerEnvironment::activateObjects(): "
+ 				<<"activated static object pos="<<PP(s_obj.pos/BS)
+ 				<<" type="<<(int)s_obj.type<<std::endl;
++*/
+ 		// This will also add the object to the active static list
+ 		addActiveObjectRaw(obj, false, dtime_s);
+ 	}
+@@ -2065,8 +2629,9 @@
+ 			i != block->m_static_objects.m_active.end(); ++i)
+ 	{
+ 		u16 id = i->first;
+-		ServerActiveObject *object = getActiveObject(id);
+-		assert(object);
++		ServerActiveObject *object = getActiveObject(id, true);
++		if (!object)
++			continue;
+ 		object->m_pending_deactivation = false;
+ 	}
+ 
+@@ -2093,12 +2658,32 @@
+ */
+ void ServerEnvironment::deactivateFarObjects(bool force_delete)
+ {
+-	std::vector<u16> objects_to_remove;
+-	for(std::map<u16, ServerActiveObject*>::iterator
+-			i = m_active_objects.begin();
+-			i != m_active_objects.end(); ++i) {
+-		ServerActiveObject* obj = i->second;
+-		assert(obj);
++	//ScopeProfiler sp(g_profiler, "SEnv: deactivateFarObjects");
++
++	//std::vector<u16> objects_to_remove;
++
++	std::vector<ServerActiveObject*> objects;
++	{
++		auto lock = m_active_objects.try_lock_shared_rec();
++		if (lock->owns_lock()) {
++			for(auto & ir : m_active_objects) {
++				auto obj = ir.second;
++				if (obj) {
++					objects.emplace_back(obj);
++				} else {
++					auto id = ir.first;
++					objects_to_remove.push_back(id);
++				}
++			}
++		}
++	}
++
++	static const auto max_objects_per_block = g_settings->getU16("max_objects_per_block");
++	if (objects.size())
++	for (auto & obj : objects)
++	{
++		if (!obj)
++			continue;
+ 
+ 		// Do not deactivate if static data creation not allowed
+ 		if(!force_delete && !obj->isStaticAllowed())
+@@ -2108,21 +2693,33 @@
+ 		if(!force_delete && obj->m_pending_deactivation)
+ 			continue;
+ 
+-		u16 id = i->first;
++		u16 id = obj->getId();
+ 		v3f objectpos = obj->getBasePosition();
+ 
++		if (!force_delete && obj->getType() == ACTIVEOBJECT_TYPE_PLAYER) {
++			//infostream<<"deactivating far object player id=" <<id<< std::endl;
++			continue;
++		}
++
+ 		// The block in which the object resides in
+ 		v3s16 blockpos_o = getNodeBlockPos(floatToInt(objectpos, BS));
+ 
++		v3POS static_block;
++		{
++			auto lock = obj->try_lock_unique();
++			if (!lock->owns_lock())
++				continue;
++			static_block = obj->m_static_block;
++		}
+ 		// If object's static data is stored in a deactivated block and object
+ 		// is actually located in an active block, re-save to the block in
+ 		// which the object is actually located in.
+ 		if(!force_delete &&
+ 				obj->m_static_exists &&
+-				!m_active_blocks.contains(obj->m_static_block) &&
++				!m_active_blocks.contains(static_block) &&
+ 				 m_active_blocks.contains(blockpos_o))
+ 		{
+-			v3s16 old_static_block = obj->m_static_block;
++			v3s16 old_static_block = static_block;
+ 
+ 			// Save to block where object is located
+ 			MapBlock *block = m_map->emergeBlock(blockpos_o, false);
+@@ -2159,9 +2756,11 @@
+ 		if(!force_delete && m_active_blocks.contains(blockpos_o))
+ 			continue;
+ 
++/*
+ 		verbosestream<<"ServerEnvironment::deactivateFarObjects(): "
+ 				<<"deactivating object id="<<id<<" on inactive block "
+ 				<<PP(blockpos_o)<<std::endl;
++*/
+ 
+ 		// If known by some client, don't immediately delete.
+ 		bool pending_delete = (obj->m_known_by_count > 0 && !force_delete);
+@@ -2184,8 +2783,9 @@
+ 					stays_in_same_block = true;
+ 
+ 				MapBlock *block = m_map->emergeBlock(obj->m_static_block, false);
++				if (!block)
++					continue;
+ 
+-				if (block) {
+ 					std::map<u16, StaticObject>::iterator n =
+ 						block->m_static_objects.m_active.find(id);
+ 					if (n != block->m_static_objects.m_active.end()) {
+@@ -2197,12 +2797,11 @@
+ 								(static_old.pos - objectpos).getLength() < save_movem)
+ 							data_changed = false;
+ 					} else {
+-						errorstream<<"ServerEnvironment::deactivateFarObjects(): "
++						infostream<<"ServerEnvironment::deactivateFarObjects(): "
+ 							<<"id="<<id<<" m_static_exists=true but "
+ 							<<"static data doesn't actually exist in "
+ 							<<PP(obj->m_static_block)<<std::endl;
+ 					}
+-				}
+ 			}
+ 
+ 			bool shall_be_written = (!stays_in_same_block || data_changed);
+@@ -2222,6 +2821,8 @@
+ 				}
+ 			}
+ 
++			if(!obj->m_removed) {
++
+ 			// Add to the block where the object is located in
+ 			v3s16 blockpos = getNodeBlockPos(floatToInt(objectpos, BS));
+ 			// Get or generate the block
+@@ -2236,8 +2837,8 @@
+ 
+ 			if(block)
+ 			{
+-				if(block->m_static_objects.m_stored.size() >= g_settings->getU16("max_objects_per_block")){
+-					errorstream<<"ServerEnv: Trying to store id="<<obj->getId()
++				if(block->m_static_objects.m_stored.size() >= max_objects_per_block){
++					infostream<<"ServerEnv: Trying to store id="<<obj->getId()
+ 							<<" statically but block "<<PP(blockpos)
+ 							<<" already contains "
+ 							<<block->m_static_objects.m_stored.size()
+@@ -2273,12 +2874,13 @@
+ 			else{
+ 				if(!force_delete){
+ 					v3s16 p = floatToInt(objectpos, BS);
+-					errorstream<<"ServerEnv: Could not find or generate "
++					infostream<<"ServerEnv: Could not find or generate "
+ 							<<"a block for storing id="<<obj->getId()
+ 							<<" statically (pos="<<PP(p)<<")"<<std::endl;
+ 					continue;
+ 				}
+ 			}
++			}
+ 		}
+ 
+ 		/*
+@@ -2288,17 +2890,21 @@
+ 
+ 		if(pending_delete && !force_delete)
+ 		{
++/*
+ 			verbosestream<<"ServerEnvironment::deactivateFarObjects(): "
+ 					<<"object id="<<id<<" is known by clients"
+ 					<<"; not deleting yet"<<std::endl;
++*/
+ 
+ 			obj->m_pending_deactivation = true;
+ 			continue;
+ 		}
+ 
++/*
+ 		verbosestream<<"ServerEnvironment::deactivateFarObjects(): "
+ 				<<"object id="<<id<<" is not known by clients"
+ 				<<"; deleting"<<std::endl;
++*/
+ 
+ 		// Tell the object about removal
+ 		obj->removingFromEnvironment();
+@@ -2307,16 +2913,28 @@
+ 
+ 		// Delete active object
+ 		if(obj->environmentDeletes())
+-			delete obj;
++		{
++			m_active_objects.set(id, nullptr);
++			objects_to_delete.push_back(obj);
++		}
++
+ 		// Id to be removed from m_active_objects
+ 		objects_to_remove.push_back(id);
+ 	}
+ 
++	//if(m_active_objects.size()) verbosestream<<"ServerEnvironment::deactivateFarObjects(): deactivated="<<objects_to_remove.size()<< " from="<<m_active_objects.size()<<std::endl;
++
++	if (!objects_to_remove.empty()) {
++		auto lock = m_active_objects.try_lock_unique_rec();
+ 	// Remove references from m_active_objects
+-	for(std::vector<u16>::iterator i = objects_to_remove.begin();
+-			i != objects_to_remove.end(); ++i) {
+-		m_active_objects.erase(*i);
++		if (lock->owns_lock())
++			for(auto & i : objects_to_remove) {
++			objects_to_delete.push_back(m_active_objects.get(i));
++			m_active_objects.erase(i);
++		}
++		objects_to_remove.clear();
+ 	}
++
+ }
+ 
+ #ifndef SERVER
+@@ -2335,6 +2953,8 @@
+ 	m_texturesource(texturesource),
+ 	m_gamedef(gamedef),
+ 	m_irr(irr)
++	,m_active_objects_client_last(0),
++	m_move_max_loop(3)
+ {
+ 	char zero = 0;
+ 	memset(attachement_parent_ids, zero, sizeof(attachement_parent_ids));
+@@ -2393,10 +3013,12 @@
+ 	return NULL;
+ }
+ 
+-void ClientEnvironment::step(float dtime)
++void ClientEnvironment::step(float dtime, float uptime, unsigned int max_cycle_ms)
+ {
+ 	DSTACK(FUNCTION_NAME);
+ 
++	TimeTaker timer0("ClientEnvironment::step()");
++
+ 	/* Step time of day */
+ 	stepTimeOfDay(dtime);
+ 
+@@ -2416,6 +3038,7 @@
+ 	bool is_climbing = lplayer->is_climbing;
+ 
+ 	f32 player_speed = lplayer->getSpeed().getLength();
++	v3f pf = lplayer->getPosition();
+ 
+ 	/*
+ 		Maximum position increment
+@@ -2433,9 +3056,21 @@
+ 	if(dtime_max_increment > 0.01)
+ 		dtime_max_increment = 0.01;
+ 
++	if(dtime_max_increment*m_move_max_loop < dtime)
++		dtime_max_increment = dtime/m_move_max_loop;
++
++	//if (dtime > 1) errorstream<<" dtime="<<dtime<<" player_speed="<<player_speed<<std::endl;
++
++#define DTIME_MAX 2.0
++
+ 	// Don't allow overly huge dtime
+-	if(dtime > 0.5)
+-		dtime = 0.5;
++	if(dtime > DTIME_MAX)
++		dtime = DTIME_MAX;
++
++
++	if (player_speed <= 0.01 && dtime < 0.1)
++		dtime_max_increment = dtime;
++
+ 
+ 	f32 dtime_downcount = dtime;
+ 
+@@ -2443,7 +3078,11 @@
+ 		Stuff that has a maximum time increment
+ 	*/
+ 
++
++	{
++		//TimeTaker timer1("ClientEnvironment::step() move");
+ 	u32 loopcount = 0;
++	u32 breaked = 0, lend_ms = porting::getTimeMs() + max_cycle_ms;
+ 	do
+ 	{
+ 		loopcount++;
+@@ -2473,26 +3112,37 @@
+ 			// Apply physics
+ 			if(free_move == false && is_climbing == false)
+ 			{
++				f32 viscosity_factor = 0;
+ 				// Gravity
+ 				v3f speed = lplayer->getSpeed();
+-				if(lplayer->in_liquid == false)
++				if(lplayer->in_liquid == false) {
+ 					speed.Y -= lplayer->movement_gravity * lplayer->physics_override_gravity * dtime_part * 2;
++					viscosity_factor = 0.97; // todo maybe depend on speed; 0.96 = ~100 nps max
++					viscosity_factor += (1.0-viscosity_factor) *
++						(1-(MAX_MAP_GENERATION_LIMIT - pf.Y/BS)/
++							MAX_MAP_GENERATION_LIMIT);
++				}
+ 
+ 				// Liquid floating / sinking
+ 				if(lplayer->in_liquid && !lplayer->swimming_vertical)
+ 					speed.Y -= lplayer->movement_liquid_sink * dtime_part * 2;
+ 
+-				// Liquid resistance
+ 				if(lplayer->in_liquid_stable || lplayer->in_liquid)
+ 				{
++					viscosity_factor = 0.3; // todo: must depend on speed^2
++				}
++				// Liquid resistance
++				if(viscosity_factor)
++				{
+ 					// How much the node's viscosity blocks movement, ranges between 0 and 1
+ 					// Should match the scale at which viscosity increase affects other liquid attributes
+-					const f32 viscosity_factor = 0.3;
+ 
+ 					v3f d_wanted = -speed / lplayer->movement_liquid_fluidity;
+ 					f32 dl = d_wanted.getLength();
+ 					if(dl > lplayer->movement_liquid_fluidity_smooth)
+ 						dl = lplayer->movement_liquid_fluidity_smooth;
++					if (lplayer->liquid_viscosity < 1) //rewrite this shit
++						dl /= 2;
+ 					dl *= (lplayer->liquid_viscosity * viscosity_factor) + (1 - viscosity_factor);
+ 
+ 					v3f d = d_wanted.normalize() * dl;
+@@ -2509,24 +3159,41 @@
+ 			lplayer->move(dtime_part, this, position_max_increment,
+ 					&player_collisions);
+ 		}
++		if (porting::getTimeMs() >= lend_ms) {
++			breaked = loopcount;
++			break;
++		}
++
+ 	}
+ 	while(dtime_downcount > 0.001);
+ 
+-	//std::cout<<"Looped "<<loopcount<<" times."<<std::endl;
++	//if (breaked) errorstream<<"loop "<<loopcount<<"/"<<m_move_max_loop<<" breaked="<<breaked<<std::endl;
+ 
+-	for(std::vector<CollisionInfo>::iterator i = player_collisions.begin();
+-			i != player_collisions.end(); ++i) {
++	if (breaked && m_move_max_loop > loopcount)
++		--m_move_max_loop;
++	if (!breaked && m_move_max_loop < 5)
++		++m_move_max_loop;
++
++	}
++
++	{
++		//TimeTaker timer2("ClientEnvironment::step() collision");
++
++	if (dtime < DTIME_MAX || lplayer->getSpeed().getLength() > PLAYER_FALL_TOLERANCE_SPEED)
++	for(auto
++			i = player_collisions.begin();
++			i != player_collisions.end(); ++i)
++	{
+ 		CollisionInfo &info = *i;
+-		v3f speed_diff = info.new_speed - info.old_speed;;
++		v3f speed_diff = info.new_speed - info.old_speed;
+ 		// Handle only fall damage
+ 		// (because otherwise walking against something in fast_move kills you)
+-		if(speed_diff.Y < 0 || info.old_speed.Y >= 0)
++		if((speed_diff.Y < 0 || info.old_speed.Y >= 0) &&
++			speed_diff.getLength() <= lplayer->movement_speed_fast * 1.1) {
+ 			continue;
+-		// Get rid of other components
+-		speed_diff.X = 0;
+-		speed_diff.Z = 0;
++		}
+ 		f32 pre_factor = 1; // 1 hp per node/s
+-		f32 tolerance = BS*14; // 5 without damage
++		f32 tolerance = PLAYER_FALL_TOLERANCE_SPEED; // 5 without damage
+ 		f32 post_factor = 1; // 1 hp per node/s
+ 		if(info.type == COLLISION_NODE)
+ 		{
+@@ -2548,6 +3215,7 @@
+ 			}
+ 		}
+ 	}
++	}
+ 
+ 	/*
+ 		A quick draft of lava damage
+@@ -2583,12 +3251,12 @@
+ 	*/
+ 	if(m_drowning_interval.step(dtime, 2.0))
+ 	{
+-		v3f pf = lplayer->getPosition();
++		//v3f pf = lplayer->getPosition();
+ 
+ 		// head
+ 		v3s16 p = floatToInt(pf + v3f(0, BS*1.6, 0), BS);
+ 		MapNode n = m_map->getNodeNoEx(p);
+-		ContentFeatures c = m_gamedef->ndef()->get(n);
++		const ContentFeatures &c = m_gamedef->ndef()->get(n);
+ 		u8 drowning_damage = c.drowning;
+ 		if(drowning_damage > 0 && lplayer->hp > 0){
+ 			u16 breath = lplayer->getBreath();
+@@ -2613,7 +3281,7 @@
+ 		// head
+ 		v3s16 p = floatToInt(pf + v3f(0, BS*1.6, 0), BS);
+ 		MapNode n = m_map->getNodeNoEx(p);
+-		ContentFeatures c = m_gamedef->ndef()->get(n);
++		const ContentFeatures &c = m_gamedef->ndef()->get(n);
+ 		if (!lplayer->hp){
+ 			lplayer->setBreath(11);
+ 		}
+@@ -2627,6 +3295,8 @@
+ 		}
+ 	}
+ 
++	{
++		//TimeTaker timer5("ClientEnvironment::step() players");
+ 	/*
+ 		Stuff that can be done in an arbitarily large dtime
+ 	*/
+@@ -2643,11 +3313,13 @@
+ 
+ 		}
+ 	}
++	}
+ 
+ 	// Update lighting on local player (used for wield item)
+ 	u32 day_night_ratio = getDayNightRatio();
+ 	{
+ 		// Get node at head
++		//float player_light = 1.0;
+ 
+ 		// On InvalidPositionException, use this as default
+ 		// (day: LIGHT_SUN, night: 0)
+@@ -2655,24 +3327,52 @@
+ 
+ 		v3s16 p = lplayer->getLightPosition();
+ 		node_at_lplayer = m_map->getNodeNoEx(p);
++		//player_light = blend_light_f1((float)getDayNightRatio()/1000, LIGHT_SUN, 0);
+ 
+ 		u16 light = getInteriorLight(node_at_lplayer, 0, m_gamedef->ndef());
+ 		u8 day = light & 0xff;
+ 		u8 night = (light >> 8) & 0xff;
+ 		finalColorBlend(lplayer->light_color, day, night, day_night_ratio);
++
++		//lplayer->light = node_at_lplayer.getLightBlendF1((float)getDayNightRatio()/1000, m_gamedef->ndef());
++
+ 	}
+ 
+ 	/*
+ 		Step active objects and update lighting of them
+ 	*/
+ 
++	{
++		//TimeTaker timer6("ClientEnvironment::step() objects");
++
+ 	g_profiler->avg("CEnv: num of objects", m_active_objects.size());
+-	bool update_lighting = m_active_object_light_update_interval.step(dtime, 0.21);
++	bool update_lighting = m_active_object_light_update_interval.step(dtime, 1);
++	u32 n = 0, calls = 0, end_ms = porting::getTimeMs() + u32(500/g_settings->getFloat("wanted_fps"));
++	int skipped = 0;
++	static unsigned int cnt = 0;
+ 	for(std::map<u16, ClientActiveObject*>::iterator
+ 			i = m_active_objects.begin();
+ 			i != m_active_objects.end(); ++i)
+ 	{
++
++		if (n++ < m_active_objects_client_last)
++			continue;
++		else
++			m_active_objects_client_last = 0;
++		++calls;
++
+ 		ClientActiveObject* obj = i->second;
++
++		auto & draw_control = getClientMap().getControl();
++		if ((pf.getDistanceFrom(obj->getPosition()) / BS) * 1.2 > draw_control.wanted_range ) {
++			if (++cnt % int((draw_control.fps_avg+1)*5.0)) {
++				//errorstream<<"skip "<<obj->getId() << " p="<<pf<< " o=" << obj->getPosition() << " r=" << pf.getDistanceFrom(obj->getPosition()) / BS << " wr=" << draw_control.wanted_range<< std::endl;
++				++skipped;
++				continue;
++			}
++			//errorstream<<"step "<<obj->getId() <<" cnt="<< cnt << " m="<<m<< " p="<<pf<< " o=" << obj->getPosition() << " r=" << pf.getDistanceFrom(obj->getPosition()) / BS << " wr=" << draw_control.wanted_range<< std::endl;
++		}
++
+ 		// Step object
+ 		obj->step(dtime, this);
+ 
+@@ -2692,11 +3392,22 @@
+ 
+ 			obj->updateLight(light);
+ 		}
++		if (porting::getTimeMs() > end_ms) {
++			m_active_objects_client_last = n;
++			break;
++		}
++	}
++	if (!calls)
++		m_active_objects_client_last = 0;
++
++	//infostream<<"objects "<<m_active_objects_client_last <<"/"<<m_active_objects.size()<<" skipped="<<skipped<<std::endl;
++
+ 	}
+ 
+ 	/*
+ 		Step and handle simple objects
+ 	*/
++
+ 	g_profiler->avg("CEnv: num of simple objects", m_simple_objects.size());
+ 	for(std::vector<ClientSimpleObject*>::iterator
+ 			i = m_simple_objects.begin(); i != m_simple_objects.end();) {
+@@ -2765,7 +3476,8 @@
+ 
+ u16 ClientEnvironment::addActiveObject(ClientActiveObject *object)
+ {
+-	assert(object); // Pre-condition
++	if (!object)
++		return 0;
+ 	if(object->getId() == 0)
+ 	{
+ 		u16 new_id = getFreeClientActiveObjectId(m_active_objects);
+@@ -2785,8 +3497,10 @@
+ 		delete object;
+ 		return 0;
+ 	}
++/*
+ 	infostream<<"ClientEnvironment::addActiveObject(): "
+ 			<<"added (id="<<object->getId()<<")"<<std::endl;
++*/
+ 	m_active_objects[object->getId()] = object;
+ 	object->addToScene(m_smgr, m_texturesource, m_irr);
+ 	{ // Update lighting immediately
+@@ -2821,9 +3535,11 @@
+ 
+ 	obj->setId(id);
+ 
++	bool add = false;
+ 	try
+ 	{
+ 		obj->initialize(init_data);
++		add = true;
+ 	}
+ 	catch(SerializationError &e)
+ 	{
+@@ -2835,13 +3551,18 @@
+ 				<<std::endl;
+ 	}
+ 
++	if (add)
+ 	addActiveObject(obj);
++	else
++		delete obj;
+ }
+ 
+ void ClientEnvironment::removeActiveObject(u16 id)
+ {
++/*
+ 	verbosestream<<"ClientEnvironment::removeActiveObject(): "
+ 			<<"id="<<id<<std::endl;
++*/
+ 	ClientActiveObject* obj = getActiveObject(id);
+ 	if(obj == NULL)
+ 	{
+@@ -2858,7 +3579,7 @@
+ {
+ 	ClientActiveObject *obj = getActiveObject(id);
+ 	if (obj == NULL) {
+-		infostream << "ClientEnvironment::processActiveObjectMessage():"
++		verbosestream << "ClientEnvironment::processActiveObjectMessage():"
+ 			<< " got message for id=" << id << ", which doesn't exist."
+ 			<< std::endl;
+ 		return;
+@@ -2881,7 +3602,10 @@
+ void ClientEnvironment::damageLocalPlayer(u8 damage, bool handle_hp)
+ {
+ 	LocalPlayer *lplayer = getLocalPlayer();
+-	assert(lplayer);
++
++	if (!lplayer)
++		return;
++
+ 
+ 	if (handle_hp) {
+ 		if (lplayer->hp > damage)

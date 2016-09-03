@@ -1,0 +1,12 @@
+diff -ruN minetest-master/src/mapgen_fractal.h minetest-freeminer/src/mapgen_fractal.h
+--- minetest-master/src/mapgen_fractal.h	2016-09-03 16:15:52.609779000 -0700
++++ minetest-freeminer/src/mapgen_fractal.h	2016-09-03 15:43:59.938741000 -0700
+@@ -53,7 +53,7 @@
+ 	MapgenFractalParams();
+ 	~MapgenFractalParams() {}
+ 
+-	void readParams(const Settings *settings);
++	void readParams(Settings *settings);
+ 	void writeParams(Settings *settings) const;
+ };
+ 

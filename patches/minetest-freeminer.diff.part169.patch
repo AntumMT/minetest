@@ -1,0 +1,14 @@
+diff -ruN minetest-master/src/client/clientlauncher.h minetest-freeminer/src/client/clientlauncher.h
+--- minetest-master/src/client/clientlauncher.h	2016-09-03 16:15:52.661779000 -0700
++++ minetest-freeminer/src/client/clientlauncher.h	2016-09-03 15:43:59.982741000 -0700
+@@ -124,6 +124,10 @@
+ 	std::string current_password;
+ 	std::string current_address;
+ 	int current_port;
++
++	//freminer:
++	void wait_data();
++	unsigned int autoexit;
+ };
+ 
+ #endif

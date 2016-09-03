@@ -1,0 +1,96 @@
+diff -ruN minetest-master/src/util/string.h minetest-freeminer/src/util/string.h
+--- minetest-master/src/util/string.h	2016-09-03 16:15:52.569779000 -0700
++++ minetest-freeminer/src/util/string.h	2016-09-03 15:43:59.906741000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++util/string.h
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #ifndef UTIL_STRING_HEADER
+@@ -27,6 +30,7 @@
+ #include <vector>
+ #include <map>
+ #include <sstream>
++#include "SColor.h"
+ #include <iomanip>
+ #include <cctype>
+ 
+@@ -75,6 +79,16 @@
+ // You must free the returned string!
+ // The returned string is allocated using new
+ wchar_t *narrow_to_wide_c(const char *str);
++
++// NEVER use those two functions unless you have a VERY GOOD reason to
++// they just convert between wide and multibyte encoding
++// multibyte encoding depends on current locale, this is no good, especially on Windows
++std::wstring narrow_to_wide_real(const std::string& mbs);
++std::string wide_to_narrow_real(const std::wstring& wcs);
++
++// try not to convert between wide/utf8 encodings; this can result in data loss
++// try to only convert between them when you need to input/output stuff via Irrlicht
++// TODO: must be named utf8_to_wide and wide_to_utf8
+ std::wstring narrow_to_wide(const std::string &mbs);
+ std::string wide_to_narrow(const std::wstring &wcs);
+ 
+@@ -85,7 +99,7 @@
+ size_t mystrlcpy(char *dst, const char *src, size_t size);
+ char *mystrtok_r(char *s, const char *sep, char **lasts);
+ u64 read_seed(const char *str);
+-bool parseColorString(const std::string &value, video::SColor &color, bool quiet);
++bool parseColorString(const std::string &value, video::SColor &color, bool quiet = true);
+ 
+ 
+ /**
+@@ -320,7 +334,7 @@
+  */
+ inline s32 mystoi(const std::wstring &str)
+ {
+-	return mystoi(wide_to_narrow(str));
++	return atoi(wide_to_narrow(str).c_str());
+ }
+ 
+ 
+@@ -602,7 +616,6 @@
+ 	return !to_check.empty();
+ }
+ 
+-
+ /**
+  * Returns a C-string, either "true" or "false", corresponding to \p val.
+  *
+@@ -613,4 +626,8 @@
+ 	return val ? "true" : "false";
+ }
+ 
++std::wstring colorizeText(const std::wstring &s, std::vector<video::SColor> &colors, const video::SColor &initial_color);
++std::wstring sanitizeChatString(const std::wstring &s);
++bool char_icompare(char c1, char c2);
++bool string_icompare(const std::string& a, const std::string& b);
+ #endif

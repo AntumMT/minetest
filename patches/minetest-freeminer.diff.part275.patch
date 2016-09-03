@@ -1,0 +1,83 @@
+diff -ruN minetest-master/src/guiKeyChangeMenu.cpp minetest-freeminer/src/guiKeyChangeMenu.cpp
+--- minetest-master/src/guiKeyChangeMenu.cpp	2016-09-03 16:15:52.601779000 -0700
++++ minetest-freeminer/src/guiKeyChangeMenu.cpp	2016-09-03 15:43:59.758740000 -0700
+@@ -1,23 +1,26 @@
+ /*
+- Minetest
+- Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
+- Copyright (C) 2013 Ciaran Gultnieks <ciaran@ciarang.com>
+- Copyright (C) 2013 teddydestodes <derkomtur@schattengang.net>
+-
+- This program is free software; you can redistribute it and/or modify
+- it under the terms of the GNU Lesser General Public License as published by
+- the Free Software Foundation; either version 2.1 of the License, or
+- (at your option) any later version.
+-
+- This program is distributed in the hope that it will be useful,
+- but WITHOUT ANY WARRANTY; without even the implied warranty of
+- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+- GNU Lesser General Public License for more details.
+-
+- You should have received a copy of the GNU Lesser General Public License along
+- with this program; if not, write to the Free Software Foundation, Inc.,
+- 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+- */
++guiKeyChangeMenu.cpp
++Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++Copyright (C) 2013 Ciaran Gultnieks <ciaran@ciarang.com>
++Copyright (C) 2013 teddydestodes <derkomtur@schattengang.net>
++*/
++
++/*
++This file is part of Freeminer.
++
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
++(at your option) any later version.
++
++Freeminer  is distributed in the hope that it will be useful,
++but WITHOUT ANY WARRANTY; without even the implied warranty of
++MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++GNU General Public License for more details.
++
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
++*/
+ 
+ #include "guiKeyChangeMenu.h"
+ #include "debug.h"
+@@ -52,6 +55,7 @@
+ 	GUI_ID_KEY_NOCLIP_BUTTON,
+ 	GUI_ID_KEY_CINEMATIC_BUTTON,
+ 	GUI_ID_KEY_CHAT_BUTTON,
++	GUI_ID_KEY_PL_LIST_BUTTON,
+ 	GUI_ID_KEY_CMD_BUTTON,
+ 	GUI_ID_KEY_CONSOLE_BUTTON,
+ 	GUI_ID_KEY_SNEAK_BUTTON,
+@@ -269,6 +273,9 @@
+ }
+ bool GUIKeyChangeMenu::OnEvent(const SEvent& event)
+ {
++	if (GUIModalMenu::OnEvent(event))
++		return true;
++
+ 	if (event.EventType == EET_KEY_INPUT_EVENT && activeKey >= 0
+ 			&& event.KeyInput.PressedDown) {
+ 		
+@@ -397,6 +404,7 @@
+ 
+ void GUIKeyChangeMenu::init_keys()
+ {
++
+ 	this->add_key(GUI_ID_KEY_FORWARD_BUTTON,   wgettext("Forward"),          "keymap_forward");
+ 	this->add_key(GUI_ID_KEY_BACKWARD_BUTTON,  wgettext("Backward"),         "keymap_backward");
+ 	this->add_key(GUI_ID_KEY_LEFT_BUTTON,      wgettext("Left"),             "keymap_left");
+@@ -416,5 +424,7 @@
+ 	this->add_key(GUI_ID_KEY_RANGE_BUTTON,     wgettext("Range select"),     "keymap_rangeselect");
+ 	this->add_key(GUI_ID_KEY_DUMP_BUTTON,      wgettext("Print stacks"),     "keymap_print_debug_stacks");
+ 	this->add_key(GUI_ID_KEY_ZOOM_BUTTON,      wgettext("Zoom"),             "keymap_zoom");
++
++	this->add_key(GUI_ID_KEY_PL_LIST_BUTTON,   wgettext("Player list"),      "keymap_playerlist");
+ }
+ 

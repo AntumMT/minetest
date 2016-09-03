@@ -1,0 +1,20 @@
+diff -ruN minetest-master/cmake/Modules/FindCURL.cmake minetest-freeminer/cmake/Modules/FindCURL.cmake
+--- minetest-master/cmake/Modules/FindCURL.cmake	2016-09-03 16:15:52.637779000 -0700
++++ minetest-freeminer/cmake/Modules/FindCURL.cmake	2016-09-03 15:43:59.966741000 -0700
+@@ -6,12 +6,16 @@
+ set(CURL_REQUIRED_VARS CURL_LIBRARY CURL_INCLUDE_DIR)
+ 
+ if(WIN32)
++  if(STATIC_BUILD)
++		SET(CURL_FOUND TRUE)
++  else()
+ 	find_file(CURL_DLL NAMES libcurl-4.dll
+ 		PATHS
+ 		"C:/Windows/System32"
+ 		DOC "Path to the cURL DLL (for installation)")
+ 	mark_as_advanced(CURL_DLL)
+ 	set(CURL_REQUIRED_VARS ${CURL_REQUIRED_VARS} CURL_DLL)
++  endif()
+ endif()
+ 
+ include(FindPackageHandleStandardArgs)

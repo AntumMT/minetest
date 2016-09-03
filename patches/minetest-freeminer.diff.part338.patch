@@ -1,0 +1,21 @@
+diff -ruN minetest-master/src/mapgen_flat.cpp minetest-freeminer/src/mapgen_flat.cpp
+--- minetest-master/src/mapgen_flat.cpp	2016-09-03 16:15:52.689779000 -0700
++++ minetest-freeminer/src/mapgen_flat.cpp	2016-09-03 15:43:59.822740000 -0700
+@@ -95,7 +95,7 @@
+ }
+ 
+ 
+-void MapgenFlatParams::readParams(const Settings *settings)
++void MapgenFlatParams::readParams(Settings *settings)
+ {
+ 	settings->getFlagStrNoEx("mgflat_spflags",      spflags, flagdesc_mapgen_flat);
+ 	settings->getS16NoEx("mgflat_ground_level",     ground_level);
+@@ -210,7 +210,7 @@
+ 
+ 	//printf("makeChunk: %dms\n", t.stop());
+ 
+-	updateLiquid(&data->transforming_liquid, full_node_min, full_node_max);
++	updateLiquid(full_node_min, full_node_max);
+ 
+ 	if (flags & MG_LIGHT)
+ 		calcLighting(node_min - v3s16(0, 1, 0), node_max + v3s16(0, 1, 0),

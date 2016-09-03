@@ -1,0 +1,17 @@
+diff -ruN minetest-master/build/osx/update_zip.sh minetest-freeminer/build/osx/update_zip.sh
+--- minetest-master/build/osx/update_zip.sh	1969-12-31 16:00:00.000000000 -0800
++++ minetest-freeminer/build/osx/update_zip.sh	2016-09-03 15:43:59.882740000 -0700
+@@ -0,0 +1,13 @@
++#!/bin/sh
++
++# Create an updated ZIP file from freeminer.app folder
++
++cd freeminer-git
++gitver=`git log -1 --format='%cd.%h' --date=short | tr -d -`
++cd ../releases
++
++# Compress app bundle as a ZIP file
++fname=freeminer-osx-bin-$gitver.zip
++rm -f $fname
++zip -9 -r $fname freeminer.app
++

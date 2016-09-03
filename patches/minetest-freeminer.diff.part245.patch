@@ -1,0 +1,86 @@
+diff -ruN minetest-master/src/filesys.cpp minetest-freeminer/src/filesys.cpp
+--- minetest-master/src/filesys.cpp	2016-09-03 16:15:52.489778000 -0700
++++ minetest-freeminer/src/filesys.cpp	2016-09-03 15:43:59.502738000 -0700
+@@ -1,22 +1,35 @@
+ /*
+-Minetest
++filesys.cpp
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
++
++// fix strange bug:
++// /usr/include/aarch64-linux-gnu/asm/sigcontext.h:26:2: error: ‘__u64’ does not name a type
++// include before anything:
++#ifndef _WIN32 // WINDOWS
++#include <sys/wait.h>
++#endif
++
++
++
+ #include "filesys.h"
+ #include "util/string.h"
+ #include <iostream>
+@@ -24,6 +37,9 @@
+ #include <string.h>
+ #include <errno.h>
+ #include <fstream>
++#if defined(__FreeBSD__)
++#include <sys/time.h>
++#endif
+ #include "log.h"
+ #include "config.h"
+ #include "porting.h"
+@@ -33,7 +49,10 @@
+ 
+ #ifdef _WIN32 // WINDOWS
+ 
++#ifndef _WIN32_WINNT
+ #define _WIN32_WINNT 0x0501
++#endif
++
+ #include <windows.h>
+ #include <shlwapi.h>
+ 
+@@ -200,6 +219,7 @@
+ 
+ #else // POSIX
+ 
++#include <unistd.h>
+ #include <sys/types.h>
+ #include <dirent.h>
+ #include <sys/stat.h>
+@@ -374,7 +394,7 @@
+ 		configuration hardcodes mkstemp("/tmp/lua_XXXXXX").
+ 	*/
+ #ifdef __ANDROID__
+-	return DIR_DELIM "sdcard" DIR_DELIM PROJECT_NAME DIR_DELIM "tmp";
++	return porting::path_user + "/tmp/";
+ #else
+ 	return DIR_DELIM "tmp";
+ #endif

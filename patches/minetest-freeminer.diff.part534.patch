@@ -1,0 +1,11 @@
+diff -ruN minetest-master/src/threading/mutex.h minetest-freeminer/src/threading/mutex.h
+--- minetest-master/src/threading/mutex.h	2016-09-03 16:15:52.565779000 -0700
++++ minetest-freeminer/src/threading/mutex.h	2016-09-03 15:43:59.726739000 -0700
+@@ -54,6 +54,7 @@
+ 	~Mutex();
+ 	void lock();
+ 	void unlock();
++	bool try_lock();
+ 
+ protected:
+ 	Mutex(bool recursive);

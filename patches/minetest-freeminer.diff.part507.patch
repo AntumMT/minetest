@@ -1,0 +1,134 @@
+diff -ruN minetest-master/src/settings.h minetest-freeminer/src/settings.h
+--- minetest-master/src/settings.h	2016-09-03 16:15:52.581779000 -0700
++++ minetest-freeminer/src/settings.h	2016-09-03 15:43:59.922741000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++settings.h
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #ifndef SETTINGS_HEADER
+@@ -28,6 +31,11 @@
+ #include <list>
+ #include <set>
+ 
++#include "porting.h"
++#include "json/json.h" // for json config values
++#include "msgpack_fix.h"
++#include <stdint.h>
++
+ class Settings;
+ struct NoiseParams;
+ 
+@@ -103,17 +111,17 @@
+ 	Settings() {}
+ 	~Settings();
+ 
+-	Settings & operator += (const Settings &other);
+-	Settings & operator = (const Settings &other);
++	//Settings & operator += (const Settings &other);
++	//Settings & operator = (const Settings &other);
+ 
+ 	/***********************
+ 	 * Reading and writing *
+ 	 ***********************/
+ 
+ 	// Read configuration file.  Returns success.
+-	bool readConfigFile(const char *filename);
++	bool readConfigFile(const std::string &filename);
+ 	//Updates configuration file.  Returns success.
+-	bool updateConfigFile(const char *filename);
++	bool updateConfigFile(const std::string &filename);
+ 	// NOTE: Types of allowed_options are ignored.  Returns success.
+ 	bool parseCommandLine(int argc, char *argv[],
+ 			std::map<std::string, ValueSpec> &allowed_options);
+@@ -154,9 +162,9 @@
+ 	// the behavior is undefined.
+ 	bool getStruct(const std::string &name, const std::string &format,
+ 			void *out, size_t olen) const;
+-	bool getNoiseParams(const std::string &name, NoiseParams &np) const;
++	bool getNoiseParams(const std::string &name, NoiseParams &np);
+ 	bool getNoiseParamsFromValue(const std::string &name, NoiseParams &np) const;
+-	bool getNoiseParamsFromGroup(const std::string &name, NoiseParams &np) const;
++	bool getNoiseParamsFromGroup(const std::string &name, NoiseParams &np);
+ 
+ 	// return all keys used
+ 	std::vector<std::string> getNames() const;
+@@ -200,7 +208,7 @@
+ 	bool setS16(const std::string &name, s16 value);
+ 	bool setU16(const std::string &name, u16 value);
+ 	bool setS32(const std::string &name, s32 value);
+-	bool setU64(const std::string &name, u64 value);
++	bool setU64(const std::string &name, uint64_t value);
+ 	bool setFloat(const std::string &name, float value);
+ 	bool setV2F(const std::string &name, v2f value);
+ 	bool setV3F(const std::string &name, v3f value);
+@@ -211,7 +219,6 @@
+ 	// N.B. if setStruct() is used to write a non-POD aggregate type,
+ 	// the behavior is undefined.
+ 	bool setStruct(const std::string &name, const std::string &format, void *value);
+-
+ 	// remove a setting
+ 	bool remove(const std::string &name);
+ 	void clear();
+@@ -219,6 +226,25 @@
+ 	void updateValue(const Settings &other, const std::string &name);
+ 	void update(const Settings &other);
+ 
++	//freeminer:
++	Json::Value getJson(const std::string & name, const Json::Value & def = Json::Value());
++	void setJson(const std::string & name, const Json::Value & value);
++
++	Json::Value m_json;
++	bool toJson(Json::Value &json) const;
++	bool fromJson(const Json::Value &json);
++	bool writeJsonFile(const std::string &filename);
++	bool readJsonFile(const std::string &filename);
++	void msgpack_pack(msgpack::packer<msgpack::sbuffer> &pk) const;
++	void msgpack_unpack(msgpack::object o);
++	friend std::ostream & operator<<(std::ostream & os, Settings & settings) {
++		Json::Value json;
++		settings.toJson(json);
++		os << json;
++		return os;
++	}
++	//=========
++
+ 	void registerChangedCallback(const std::string &name,
+ 		SettingsChangedCallback cbf, void *userdata = NULL);
+ 	void deregisterChangedCallback(const std::string &name,
+@@ -243,5 +269,7 @@
+ 
+ };
+ 
+-#endif
++extern Settings *g_settings;
++extern std::string g_settings_path;
+ 
++#endif

@@ -1,0 +1,76 @@
+diff -ruN minetest-master/src/util/serialize.h minetest-freeminer/src/util/serialize.h
+--- minetest-master/src/util/serialize.h	2016-09-03 16:15:52.521778000 -0700
++++ minetest-freeminer/src/util/serialize.h	2016-09-03 15:43:59.882740000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++util/serialize.h
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #ifndef UTIL_SERIALIZE_HEADER
+@@ -43,6 +46,9 @@
+ #include <string>
+ #include <vector>
+ 
++#include "../msgpack_fix.h"
++#include "msgpack_define_external.h"
++
+ #define FIXEDPOINT_FACTOR 1000.0f
+ 
+ // 0x7FFFFFFF / 1000.0f is not serializable.
+@@ -275,7 +281,12 @@
+ 
+ inline void writeF1000(u8 *data, f32 i)
+ {
+-	assert(i >= F1000_MIN && i <= F1000_MAX);
++	//assert(i >= F1000_MIN && i <= F1000_MAX);
++	if (i < F1000_MIN)
++		writeS32(data, F1000_MIN);
++	else if (i > F1000_MAX)
++		writeS32(data, F1000_MAX);
++	else
+ 	writeS32(data, i * FIXEDPOINT_FACTOR);
+ }
+ 
+@@ -405,6 +416,15 @@
+ // Reads a string encoded in JSON format
+ std::string deSerializeJsonString(std::istream &is);
+ 
++MSGPACK_DEFINE_EXTERNAL(v2f, X, Y);
++MSGPACK_DEFINE_EXTERNAL(v3f, X, Y, Z);
++//MSGPACK_DEFINE_EXTERNAL(v2s16, X, Y);
++MSGPACK_DEFINE_EXTERNAL(v2s32, X, Y);
++MSGPACK_DEFINE_EXTERNAL(v3s16, X, Y, Z);
++MSGPACK_DEFINE_EXTERNAL(v3s32, X, Y, Z);
++MSGPACK_DEFINE_EXTERNAL(video::SColor, color);
++MSGPACK_DEFINE_EXTERNAL(aabb3f, MinEdge, MaxEdge);
++
+ // Creates a string consisting of the hexadecimal representation of `data`
+ std::string serializeHexString(const std::string &data, bool insert_spaces=false);
+ 

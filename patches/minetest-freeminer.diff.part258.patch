@@ -1,0 +1,86 @@
+diff -ruN minetest-master/src/fontengine.cpp minetest-freeminer/src/fontengine.cpp
+--- minetest-master/src/fontengine.cpp	2016-09-03 16:15:52.573779000 -0700
++++ minetest-freeminer/src/fontengine.cpp	2016-09-03 15:43:59.730739000 -0700
+@@ -23,10 +23,8 @@
+ #include "constants.h"
+ #include "filesys.h"
+ 
+-#if USE_FREETYPE
+ #include "gettext.h"
+ #include "xCGUITTFont.h"
+-#endif
+ 
+ /** maximum size distance for getting a "similar" font size */
+ #define MAX_FONT_SIZE_OFFSET 10
+@@ -61,19 +59,16 @@
+ 
+ 	m_currentMode = FM_Simple;
+ 
+-#if USE_FREETYPE
+-	if (g_settings->getBool("freetype")) {
+ 		m_default_size[FM_Standard] = m_settings->getU16("font_size");
+ 		m_default_size[FM_Fallback] = m_settings->getU16("fallback_font_size");
+ 		m_default_size[FM_Mono]     = m_settings->getU16("mono_font_size");
+ 
+-		if (is_yes(gettext("needs_fallback_font"))) {
++		if (is_yes(_("needs_fallback_font"))) {
+ 			m_currentMode = FM_Fallback;
+ 		}
+ 		else {
+ 			m_currentMode = FM_Standard;
+ 		}
+-	}
+ 
+ 	// having freetype but not using it is quite a strange case so we need to do
+ 	// special handling for it
+@@ -83,7 +78,6 @@
+ 		m_settings->setDefault("font_size", fontsize.str());
+ 		m_settings->setDefault("mono_font_size", fontsize.str());
+ 	}
+-#endif
+ 
+ 	m_default_size[FM_Simple]       = m_settings->getU16("font_size");
+ 	m_default_size[FM_SimpleMono]   = m_settings->getU16("mono_font_size");
+@@ -217,20 +211,16 @@
+ /******************************************************************************/
+ void FontEngine::readSettings()
+ {
+-#if USE_FREETYPE
+-	if (g_settings->getBool("freetype")) {
+ 		m_default_size[FM_Standard] = m_settings->getU16("font_size");
+ 		m_default_size[FM_Fallback] = m_settings->getU16("fallback_font_size");
+ 		m_default_size[FM_Mono]     = m_settings->getU16("mono_font_size");
+ 
+-		if (is_yes(gettext("needs_fallback_font"))) {
++		if (is_yes(_("needs_fallback_font"))) {
+ 			m_currentMode = FM_Fallback;
+ 		}
+ 		else {
+ 			m_currentMode = FM_Standard;
+ 		}
+-	}
+-#endif
+ 	m_default_size[FM_Simple]       = m_settings->getU16("font_size");
+ 	m_default_size[FM_SimpleMono]   = m_settings->getU16("mono_font_size");
+ 
+@@ -314,11 +304,8 @@
+ 		initSimpleFont(basesize, mode);
+ 		return;
+ 	}
+-#if USE_FREETYPE
++
+ 	else {
+-		if (! is_yes(m_settings->get("freetype"))) {
+-			return;
+-		}
+ 		unsigned int size = floor(
+ 				porting::getDisplayDensity() *
+ 				m_settings->getFloat("gui_scaling") *
+@@ -349,7 +336,6 @@
+ 					<< font_path << std::endl;
+ 		}
+ 	}
+-#endif
+ }
+ 
+ /** initialize a font without freetype */

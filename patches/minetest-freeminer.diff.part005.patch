@@ -1,0 +1,16 @@
+diff -ruN minetest-master/build/android_fm/jni/Application.mk minetest-freeminer/build/android_fm/jni/Application.mk
+--- minetest-master/build/android_fm/jni/Application.mk	1969-12-31 16:00:00.000000000 -0800
++++ minetest-freeminer/build/android_fm/jni/Application.mk	2016-09-03 15:43:59.462738000 -0700
+@@ -0,0 +1,12 @@
++NDK_TOOLCHAIN_VERSION := 4.9
++
++#APP_PLATFORM := android-15
++APP_MODULES := freeminer
++APP_STL := gnustl_static
++
++#NDK_TOOLCHAIN_VERSION := clang3.6      # broken curl
++
++#APP_STL := c++_shared
++
++APP_CPPFLAGS += -std=c++11 -fexceptions
++APP_GNUSTL_FORCE_CPP_FEATURES := rtti

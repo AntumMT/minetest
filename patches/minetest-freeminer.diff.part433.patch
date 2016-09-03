@@ -1,0 +1,19 @@
+diff -ruN minetest-master/src/script/cpp_api/s_async.cpp minetest-freeminer/src/script/cpp_api/s_async.cpp
+--- minetest-master/src/script/cpp_api/s_async.cpp	2016-09-03 16:15:52.617779000 -0700
++++ minetest-freeminer/src/script/cpp_api/s_async.cpp	2016-09-03 15:43:59.950741000 -0700
+@@ -260,6 +260,7 @@
+ 
+ 	// Main loop
+ 	while (!stopRequested()) {
++		EXCEPTION_HANDLER_BEGIN;
+ 		// Wait for job
+ 		LuaJobInfo toProcess = jobDispatcher->getJob();
+ 
+@@ -297,6 +298,7 @@
+ 
+ 		// Put job result
+ 		jobDispatcher->putJobResult(toProcess);
++		EXCEPTION_HANDLER_END;
+ 	}
+ 
+ 	lua_pop(L, 2);  // Pop core and error handler

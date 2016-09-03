@@ -1,0 +1,77 @@
+diff -ruN minetest-master/src/script/lua_api/l_vmanip.cpp minetest-freeminer/src/script/lua_api/l_vmanip.cpp
+--- minetest-master/src/script/lua_api/l_vmanip.cpp	2016-09-03 16:15:52.681779000 -0700
++++ minetest-freeminer/src/script/lua_api/l_vmanip.cpp	2016-09-03 15:43:59.810740000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++script/lua_api/l_vmanip.cpp
+ Copyright (C) 2013 kwolekr, Ryan Kwolek <kwolekr@minetest.net>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ 
+@@ -150,7 +153,7 @@
+ 
+ 	LuaVoxelManip *o = checkobject(L, 1);
+ 
+-	Map *map = &(env->getMap());
++	//Map *map = &(env->getMap());
+ 	INodeDefManager *ndef = getServer(L)->getNodeDefManager();
+ 	MMVManip *vm = o->vm;
+ 
+@@ -158,7 +161,7 @@
+ 	mg.vm   = vm;
+ 	mg.ndef = ndef;
+ 
+-	mg.updateLiquid(&map->m_transforming_liquid,
++	mg.updateLiquid(
+ 			vm->m_area.MinEdge, vm->m_area.MaxEdge);
+ 
+ 	return 0;
+@@ -325,7 +328,7 @@
+ 	Map *map = &(env->getMap());
+ 
+ 	// TODO: Optimize this by using Mapgen::calcLighting() instead
+-	std::map<v3s16, MapBlock *> lighting_mblocks;
++	concurrent_map<v3POS, MapBlock *> lighting_mblocks;
+ 	std::map<v3s16, MapBlock *> *mblocks = &o->modified_blocks;
+ 
+ 	lighting_mblocks.insert(mblocks->begin(), mblocks->end());
+@@ -334,11 +337,12 @@
+ 
+ 	MapEditEvent event;
+ 	event.type = MEET_OTHER;
++/*
+ 	for (std::map<v3s16, MapBlock *>::iterator
+ 		it = mblocks->begin();
+ 		it != mblocks->end(); ++it)
+ 		event.modified_blocks.insert(it->first);
+-
++*/
+ 	map->dispatchEvent(&event);
+ 
+ 	mblocks->clear();

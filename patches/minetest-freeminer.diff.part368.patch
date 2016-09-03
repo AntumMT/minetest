@@ -1,0 +1,13 @@
+diff -ruN minetest-master/src/mg_ore.cpp minetest-freeminer/src/mg_ore.cpp
+--- minetest-master/src/mg_ore.cpp	2016-09-03 16:15:52.717779000 -0700
++++ minetest-freeminer/src/mg_ore.cpp	2016-09-03 15:43:59.834740000 -0700
+@@ -137,6 +137,9 @@
+ 	u32 cvolume    = csize * csize * csize;
+ 	u32 nclusters = volume / clust_scarcity;
+ 
++	if (clust_scarcity > volume && 1 >= pr.range(0, clust_scarcity/volume))
++		nclusters = 1;
++
+ 	for (u32 i = 0; i != nclusters; i++) {
+ 		int x0 = pr.range(nmin.X, nmax.X - csize + 1);
+ 		int y0 = pr.range(nmin.Y, nmax.Y - csize + 1);

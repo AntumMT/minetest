@@ -1,0 +1,172 @@
+diff -ruN minetest-master/src/mg_biome.cpp minetest-freeminer/src/mg_biome.cpp
+--- minetest-master/src/mg_biome.cpp	2016-09-03 16:15:52.489778000 -0700
++++ minetest-freeminer/src/mg_biome.cpp	2016-09-03 15:43:59.866740000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++biome.cpp
+ Copyright (C) 2010-2013 kwolekr, Ryan Kwolek <kwolekr@minetest.net>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "mg_biome.h"
+@@ -23,7 +26,7 @@
+ #include "gamedef.h"
+ #include "nodedef.h"
+ #include "map.h" //for MMVManip
+-#include "log.h"
++#include "log_types.h"
+ #include "util/numeric.h"
+ #include "util/mathconstants.h"
+ #include "porting.h"
+@@ -58,11 +61,29 @@
+ 	b->m_nodenames.push_back("mapgen_water_source");
+ 	b->m_nodenames.push_back("mapgen_water_source");
+ 	b->m_nodenames.push_back("mapgen_river_water_source");
++
++	//freeminer
++	b->m_nodenames.push_back("mapgen_ice");
++	b->m_nodenames.push_back("mapgen_dirt_with_snow");
++	//========
++
+ 	b->m_nodenames.push_back("mapgen_stone");
+ 	b->m_nodenames.push_back("ignore");
+ 	m_ndef->pendNodeResolve(b);
+ 
+-	add(b);
++	year_days = g_settings->getS16("year_days");
++	weather_heat_season = g_settings->getS16("weather_heat_season");
++	weather_heat_daily = g_settings->getS16("weather_heat_daily");
++	weather_heat_width = g_settings->getS16("weather_heat_width");
++	weather_heat_height = g_settings->getS16("weather_heat_height");
++	weather_humidity_season = g_settings->getS16("weather_humidity_season");
++	weather_humidity_daily = g_settings->getS16("weather_humidity_daily");
++	weather_humidity_width = g_settings->getS16("weather_humidity_width");
++	weather_humidity_days = g_settings->getS16("weather_humidity_days");
++	weather_hot_core = g_settings->getS16("weather_hot_core");
++
++	if (add(b) == OBJDEF_INVALID_HANDLE)
++		delete b;
+ }
+ 
+ 
+@@ -86,13 +107,13 @@
+ 	for (size_t i = 1; i < m_objects.size(); i++)
+ 		delete (Biome *)m_objects[i];
+ 
+-	m_objects.resize(1);
++	m_objects.clear();
+ }
+ 
+ ////////////////////////////////////////////////////////////////////////////////
+ 
+ 
+-void BiomeParamsOriginal::readParams(const Settings *settings)
++void BiomeParamsOriginal::readParams(Settings *settings)
+ {
+ 	settings->getNoiseParams("mg_biome_np_heat",           np_heat);
+ 	settings->getNoiseParams("mg_biome_np_heat_blend",     np_heat_blend);
+@@ -214,8 +235,11 @@
+ 		b = (Biome *)m_bmgr->getRaw(i);
+ 		if (!b || y > b->y_max || y < b->y_min)
+ 			continue;
++		float heat_point = (b->heat_point - 50) * (( m_params->np_heat.offset + m_params->np_heat.scale ) / 100)
++			 + m_params->np_heat.offset;
++
++		float d_heat     = heat     - heat_point;
+ 
+-		float d_heat     = heat     - b->heat_point;
+ 		float d_humidity = humidity - b->humidity_point;
+ 		float dist = (d_heat * d_heat) +
+ 					 (d_humidity * d_humidity);
+@@ -228,6 +252,53 @@
+ 	return biome_closest ? biome_closest : (Biome *)m_bmgr->getRaw(BIOME_NONE);
+ }
+ 
++// Freeminer Weather
++s16 BiomeManager::calcBlockHeat(v3POS p, uint64_t seed, float timeofday, float totaltime, bool use_weather) {
++	//variant 1: full random
++	//f32 heat = NoisePerlin3D(np_heat, p.X, env->getGameTime()/100, p.Z, seed);
++
++	//variant 2: season change based on default heat map
++	auto heat = NoisePerlin2D(&(mapgen_params->bparams->np_heat), p.X, p.Z, seed); // -30..20..70
++
++	if (use_weather) {
++		f32 seasonv = totaltime;
++		seasonv /= 86400 * year_days; // season change speed
++		seasonv += (f32)p.X / weather_heat_width; // you can walk to area with other season
++		seasonv = sin(seasonv * M_PI);
++		//heat += (weather_heat_season * (heat < offset ? 2 : 0.5)) * seasonv; // -60..0..30
++		heat += (weather_heat_season) * seasonv; // -60..0..30
++
++		// daily change, hotter at sun +4, colder at night -4
++		heat += weather_heat_daily * (sin(cycle_shift(timeofday, -0.25) * M_PI) - 0.5); //-64..0..34
++	}
++	heat += p.Y / weather_heat_height; // upper=colder, lower=hotter, 3c per 1000
++
++	if (weather_hot_core && p.Y < -(MAX_MAP_GENERATION_LIMIT-weather_hot_core))
++		heat += 6000 * (1.0-((float)(p.Y - -MAX_MAP_GENERATION_LIMIT)/weather_hot_core)); //hot core, later via realms
++
++	return heat;
++}
++
++
++s16 BiomeManager::calcBlockHumidity(v3POS p, uint64_t seed, float timeofday, float totaltime, bool use_weather) {
++
++	auto humidity = NoisePerlin2D(&(mapgen_params->bparams->np_humidity), p.X, p.Z, seed);
++	humidity *= 1.0 - ((float)p.Y / MAX_MAP_GENERATION_LIMIT);
++
++	if (use_weather) {
++		f32 seasonv = totaltime;
++		seasonv /= 86400 * weather_humidity_days; // bad weather change speed (2 days)
++		seasonv += (f32)p.Z / weather_humidity_width;
++		humidity += weather_humidity_season * sin(seasonv * M_PI);
++		humidity += weather_humidity_daily * (sin(cycle_shift(timeofday, -0.1) * M_PI) - 0.5);
++	}
++
++	humidity = rangelim(humidity, 0, 100);
++
++	return humidity;
++}
++//===============fm end
++
+ 
+ ////////////////////////////////////////////////////////////////////////////////
+ 
+@@ -239,6 +310,12 @@
+ 	getIdFromNrBacklog(&c_water_top,   "mapgen_water_source",       CONTENT_AIR);
+ 	getIdFromNrBacklog(&c_water,       "mapgen_water_source",       CONTENT_AIR);
+ 	getIdFromNrBacklog(&c_river_water, "mapgen_river_water_source", CONTENT_AIR);
++
++	//freeminer:
++	getIdFromNrBacklog(&c_ice,         "mapgen_ice",                c_water);
++	getIdFromNrBacklog(&c_top_cold,    "mapgen_dirt_with_snow",     c_top);
++	//==========
++
+ 	getIdFromNrBacklog(&c_riverbed,    "mapgen_stone",              CONTENT_AIR);
+ 	getIdFromNrBacklog(&c_dust,        "ignore",                    CONTENT_IGNORE);
+ }

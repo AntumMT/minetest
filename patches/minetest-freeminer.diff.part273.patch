@@ -1,0 +1,577 @@
+diff -ruN minetest-master/src/guiFormSpecMenu.cpp minetest-freeminer/src/guiFormSpecMenu.cpp
+--- minetest-master/src/guiFormSpecMenu.cpp	2016-09-03 16:15:52.509778000 -0700
++++ minetest-freeminer/src/guiFormSpecMenu.cpp	2016-09-03 15:43:59.878740000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++guiFormSpecMenu.cpp
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ 
+@@ -42,6 +45,7 @@
+ #include "filesys.h"
+ #include "gettime.h"
+ #include "gettext.h"
++#include "intlGUIEditBox.h"
+ #include "scripting_game.h"
+ #include "porting.h"
+ #include "settings.h"
+@@ -460,7 +464,6 @@
+ 				L"",
+ 				258+m_fields.size()
+ 			);
+-
+ 		bool is_horizontal = true;
+ 
+ 		if (parts[2] == "vertical")
+@@ -742,8 +745,7 @@
+ 			e->setDynamicData(data->table_dyndata[name]);
+ 		}
+ 
+-		if ((str_initial_selection != "") &&
+-				(str_initial_selection != "0"))
++		if (str_initial_selection != "" && str_initial_selection != "0")
+ 			e->setSelected(stoi(str_initial_selection.c_str()));
+ 
+ 		m_tables.push_back(std::pair<FieldSpec,GUITable*>(spec, e));
+@@ -814,8 +816,7 @@
+ 			e->setDynamicData(data->table_dyndata[name]);
+ 		}
+ 
+-		if ((str_initial_selection != "") &&
+-				(str_initial_selection != "0"))
++		if (str_initial_selection != "" && str_initial_selection != "0")
+ 			e->setSelected(stoi(str_initial_selection.c_str()));
+ 
+ 		m_tables.push_back(std::pair<FieldSpec,GUITable*>(spec, e));
+@@ -895,12 +896,16 @@
+ 	std::vector<std::string> parts = split(element,';');
+ 
+ 	if ((parts.size() == 4) || (parts.size() == 5) ||
++		(parts.size() == 6) ||
+ 		((parts.size() > 5) && (m_formspec_version > FORMSPEC_API_VERSION)))
+ 	{
+ 		std::vector<std::string> v_pos = split(parts[0],',');
+ 		std::vector<std::string> v_geom = split(parts[1],',');
+ 		std::string name = parts[2];
+ 		std::string label = parts[3];
++		std::string default_val;
++		if (parts.size() == 6)
++			default_val = parts[5];
+ 
+ 		MY_CHECKPOS("pwdfield",0);
+ 		MY_CHECKGEOM("pwdfield",1);
+@@ -918,12 +923,15 @@
+ 
+ 		core::rect<s32> rect = core::rect<s32>(pos.X, pos.Y, pos.X+geom.X, pos.Y+geom.Y);
+ 
++		if(m_form_src && default_val.size())
++			default_val = m_form_src->resolveText(default_val);
++
+ 		std::wstring wlabel = utf8_to_wide(unescape_string(label));
+ 
+ 		FieldSpec spec(
+ 			name,
+ 			wlabel,
+-			L"",
++			narrow_to_wide(default_val),
+ 			258+m_fields.size()
+ 			);
+ 
+@@ -1004,18 +1012,9 @@
+ 	else
+ 	{
+ 		spec.send = true;
+-		gui::IGUIElement *e;
+-#if USE_FREETYPE && IRRLICHT_VERSION_MAJOR == 1 && IRRLICHT_VERSION_MINOR < 9
+-		if (g_settings->getBool("freetype")) {
+-			e = (gui::IGUIElement *) new gui::intlGUIEditBox(spec.fdefault.c_str(),
+-				true, Environment, this, spec.fid, rect);
+-			e->drop();
+-		} else {
+-#else
+-		{
+-#endif
+-			e = Environment->addEditBox(spec.fdefault.c_str(), rect, true, this, spec.fid);
+-		}
++		gui::IGUIEditBox *e = (gui::IGUIEditBox *) new gui::intlGUIEditBox(spec.fdefault.c_str(), true, Environment, this, spec.fid, rect);
++		e->drop();
++
+ 		if (spec.fname == data->focused_fieldname) {
+ 			Environment->setFocus(e);
+ 		}
+@@ -1104,19 +1103,8 @@
+ 	else
+ 	{
+ 		spec.send = true;
+-
+-		gui::IGUIEditBox *e;
+-#if USE_FREETYPE && IRRLICHT_VERSION_MAJOR == 1 && IRRLICHT_VERSION_MINOR < 9
+-		if (g_settings->getBool("freetype")) {
+-			e = (gui::IGUIEditBox *) new gui::intlGUIEditBox(spec.fdefault.c_str(),
+-				true, Environment, this, spec.fid, rect);
+-			e->drop();
+-		} else {
+-#else
+-		{
+-#endif
+-			e = Environment->addEditBox(spec.fdefault.c_str(), rect, true, this, spec.fid);
+-		}
++		gui::IGUIEditBox *e = (gui::IGUIEditBox *) new gui::intlGUIEditBox(spec.fdefault.c_str(), true, Environment, this, spec.fid, rect);
++		e->drop();
+ 
+ 		if (spec.fname == data->focused_fieldname) {
+ 			Environment->setFocus(e);
+@@ -1424,8 +1412,8 @@
+ 		e->setNotClipped(true);
+ 
+ 		for (unsigned int i = 0; i < buttons.size(); i++) {
+-			e->addTab(unescape_enriched(unescape_string(
+-				utf8_to_wide(buttons[i]))).c_str(), -1);
++			auto wlabel = unescape_enriched(unescape_string(utf8_to_wide(buttons[i])));
++			e->addTab(wlabel.c_str(), -1);
+ 		}
+ 
+ 		if ((tab_index >= 0) &&
+@@ -1822,6 +1810,8 @@
+ 		return;
+ 	}
+ 
++	porting::irr_device_wait_egl(m_device);
++
+ 	parserData mydata;
+ 
+ 	//preserve tables
+@@ -1842,8 +1832,7 @@
+ 		if (focused_id > 257) {
+ 			for (u32 i=0; i<m_fields.size(); i++) {
+ 				if (m_fields[i].fid == focused_id) {
+-					mydata.focused_fieldname =
+-						m_fields[i].fname;
++					mydata.focused_fieldname = m_fields[i].fname;
+ 					break;
+ 				}
+ 			}
+@@ -1886,15 +1875,15 @@
+ 	m_slotbg_n = video::SColor(255,128,128,128);
+ 	m_slotbg_h = video::SColor(255,192,192,192);
+ 
+-	m_default_tooltip_bgcolor = video::SColor(255,110,130,60);
++	m_default_tooltip_bgcolor = video::SColor(255,56,121,65);
+ 	m_default_tooltip_color = video::SColor(255,255,255,255);
+ 
+ 	m_slotbordercolor = video::SColor(200,0,0,0);
+ 	m_slotborder = false;
+ 
+ 	// Add tooltip
++	if(!m_tooltip_element)
+ 	{
+-		assert(m_tooltip_element == NULL);
+ 		// Note: parent != this so that the tooltip isn't clipped by the menu rectangle
+ 		m_tooltip_element = addStaticText(Environment, L"",core::rect<s32>(0,0,110,18));
+ 		m_tooltip_element->enableOverrideColor(true);
+@@ -2032,7 +2021,8 @@
+ 	m_tooltip_element->setOverrideFont(m_font);
+ 
+ 	gui::IGUISkin* skin = Environment->getSkin();
+-	sanity_check(skin != NULL);
++	if (!skin)
++		return;
+ 	gui::IGUIFont *old_font = skin->getFont();
+ 	skin->setFont(m_font);
+ 
+@@ -2290,9 +2280,11 @@
+ 	}
+ 
+ 	Inventory *inv = m_invmgr->getInventory(m_selected_item->inventoryloc);
+-	sanity_check(inv);
++	if (!inv)
++		return;
+ 	InventoryList *list = inv->getList(m_selected_item->listname);
+-	sanity_check(list);
++	if (!list)
++		return;
+ 	ItemStack stack = list->getItem(m_selected_item->i);
+ 	stack.count = m_selected_amount;
+ 
+@@ -2312,7 +2304,8 @@
+ 	}
+ 
+ 	gui::IGUISkin* skin = Environment->getSkin();
+-	sanity_check(skin != NULL);
++	if(!skin)
++		return;
+ 	gui::IGUIFont *old_font = skin->getFont();
+ 	skin->setFont(m_font);
+ 
+@@ -2383,8 +2376,8 @@
+ 	/*
+ 		Call base class
+ 	*/
++	if (m_itemimages.size())
+ 	gui::IGUIElement::draw();
+-
+ 	/*
+ 		Draw images
+ 	*/
+@@ -2465,6 +2458,9 @@
+ 			NULL, m_gamedef, IT_ROT_HOVERED);
+ 	}
+ 
++	if (!m_itemimages.size())
++		gui::IGUIElement::draw();
++
+ /* TODO find way to show tooltips on touchscreen */
+ #ifndef HAVE_TOUCHSCREENGUI
+ 	m_pointer = m_device->getCursorControl()->getPosition();
+@@ -2727,7 +2723,7 @@
+ 				} else if (s.ftype == f_Table) {
+ 					GUITable *table = getTable(s.fname);
+ 					if (table) {
+-						fields[name] = table->checkEvent();
++						fields[s.fname] = table->checkEvent();
+ 					}
+ 				}
+ 				else if(s.ftype == f_DropDown) {
+@@ -2759,7 +2755,7 @@
+ 					if (e != 0) {
+ 						std::stringstream ss;
+ 						ss << (e->getActiveTab() +1);
+-						fields[name] = ss.str();
++						fields[s.fname] = ss.str();
+ 					}
+ 				}
+ 				else if (s.ftype == f_CheckBox) {
+@@ -2773,9 +2769,9 @@
+ 
+ 					if (e != 0) {
+ 						if (e->isChecked())
+-							fields[name] = "true";
++							fields[s.fname] = "true";
+ 						else
+-							fields[name] = "false";
++							fields[s.fname] = "false";
+ 					}
+ 				}
+ 				else if (s.ftype == f_ScrollBar) {
+@@ -2791,9 +2787,9 @@
+ 						std::stringstream os;
+ 						os << e->getPos();
+ 						if (s.fdefault == L"Changed")
+-							fields[name] = "CHG:" + os.str();
++							fields[s.fname] = "CHG:" + os.str();
+ 						else
+-							fields[name] = "VAL:" + os.str();
++							fields[s.fname] = "VAL:" + os.str();
+  					}
+ 				}
+ 				else
+@@ -2823,6 +2819,9 @@
+ 
+ bool GUIFormSpecMenu::preprocessEvent(const SEvent& event)
+ {
++
++	GUIModalMenu::preprocessEvent(event);
++
+ 	// The IGUITabControl renders visually using the skin's selected
+ 	// font, which we override for the duration of form drawing,
+ 	// but computes tab hotspots based on how it would have rendered
+@@ -2839,7 +2838,8 @@
+ 		if (hovered && isMyChild(hovered) &&
+ 				hovered->getType() == gui::EGUIET_TAB_CONTROL) {
+ 			gui::IGUISkin* skin = Environment->getSkin();
+-			sanity_check(skin != NULL);
++			if (!skin)
++				return false;
+ 			gui::IGUIFont *old_font = skin->getFont();
+ 			skin->setFont(m_font);
+ 			bool retval = hovered->OnEvent(event);
+@@ -2857,6 +2857,7 @@
+ 			gui::IGUIElement *focused = Environment->getFocus();
+ 			if (focused && isMyChild(focused) &&
+ 					(focused->getType() == gui::EGUIET_LIST_BOX ||
++					 (focused->getType() == gui::EGUIET_EDIT_BOX && !(kp == getKeySetting("keymap_inventory"))) ||
+ 					 focused->getType() == gui::EGUIET_CHECK_BOX)) {
+ 				OnEvent(event);
+ 				return true;
+@@ -2894,7 +2895,7 @@
+ 		}
+ 	}
+ 
+-	#ifdef __ANDROID__
++#ifdef HAVE_TOUCHSCREENGUI
+ 	// display software keyboard when clicking edit boxes
+ 	if (event.EventType == EET_MOUSE_INPUT_EVENT
+ 			&& event.MouseInput.Event == EMIE_LMOUSE_PRESSED_DOWN) {
+@@ -2906,13 +2907,18 @@
+ 			if (retval) {
+ 				Environment->setFocus(hovered);
+ 			}
++#ifdef __ANDROID__
++		if (porting::canKeyboard()) {
++			// keyboard shown in GUIModalMenu::preprocessEvent
++			//porting::displayKeyboard(true, porting::app_global, porting::jnienv);
++		} else {
+ 			m_JavaDialogFieldName = getNameByID(hovered->getID());
+-			std::string message   = gettext("Enter ");
++			std::string message   = _("Enter ");
+ 			std::string label     = wide_to_utf8(getLabelByID(hovered->getID()));
+ 			if (label == "") {
+ 				label = "text";
+ 			}
+-			message += gettext(label) + ":";
++			message += std::string(_(label.c_str())) + ":";
+ 
+ 			/* single line text input */
+ 			int type = 2;
+@@ -2927,9 +2933,12 @@
+ 				type = 3;
+ 			}
+ 
+-			porting::showInputDialog(gettext("ok"), "",
++			porting::showInputDialog(_("ok"), "",
+ 					wide_to_utf8(((gui::IGUIEditBox*) hovered)->getText()),
+ 					type);
++		}
++#endif
++
+ 			return retval;
+ 		}
+ 	}
+@@ -3017,7 +3026,7 @@
+ 			dont_send_event = true;
+ 		}
+ 		else if (event.TouchInput.touchedCount > 2) {
+-			errorstream
++			infostream
+ 			<< "GUIFormSpecMenu::preprocessEvent to many multitouch events "
+ 			<< event.TouchInput.touchedCount << " ignoring them" << std::endl;
+ 		}
+@@ -3104,7 +3113,7 @@
+ 		}
+ 
+ 		SEvent* translated = new SEvent();
+-		assert(translated != 0);
++		//assert(translated != 0);
+ 		//translate doubleclick to escape
+ 		memset(translated, 0, sizeof(SEvent));
+ 		translated->EventType = irr::EET_KEY_INPUT_EVENT;
+@@ -3145,7 +3154,7 @@
+ 			return true;
+ 		} else if (m_client != NULL && event.KeyInput.PressedDown &&
+ 				(kp == getKeySetting("keymap_screenshot"))) {
+-			m_client->makeScreenshot(m_device);
++			m_client->makeScreenshot();
+ 		}
+ 		if (event.KeyInput.PressedDown &&
+ 			(event.KeyInput.Key==KEY_RETURN ||
+@@ -3177,6 +3186,74 @@
+ 			return true;
+ 		}
+ 
++		if (event.KeyInput.PressedDown && kp == getKeySetting("keymap_drop")) {
++
++			// get item
++			ItemSpec s = getItemAtPos(m_pointer);
++			Inventory *inv_s = NULL;
++
++			if(s.isValid())
++			do { // breakable
++				inv_s = m_invmgr->getInventory(s.inventoryloc);
++
++				if(!inv_s) {
++					errorstream << "InventoryMenu: The selected inventory location "
++							<< "\"" << s.inventoryloc.dump() << "\" doesn't exist"
++							<< std::endl;
++					s.i = -1;  // make it invalid again
++					break;
++				}
++
++				InventoryList *list_from = inv_s->getList(s.listname);
++				if(list_from == NULL) {
++					verbosestream << "InventoryMenu: The selected inventory list \""
++							<< s.listname << "\" does not exist" << std::endl;
++					s.i = -1;  // make it invalid again
++					break;
++				}
++
++				if((u32)s.i >= list_from->getSize()) {
++					infostream << "InventoryMenu: The selected inventory list \""
++							<< s.listname<<"\" is too small (i=" << s.i << ", size="
++							<< list_from->getSize() << ")" << std::endl;
++					s.i = -1;  // make it invalid again
++					break;
++				}
++
++				ItemStack stack_from = list_from->getItem(s.i);
++				if(stack_from.count<=0)
++					break;
++
++				u32 drop_amount = 0;
++
++				if (event.KeyInput.Control) {
++					// if drop key + ctrl = drop full stack
++					drop_amount = stack_from.count;
++				} else {
++					// if drop key without ctrl = drop one item
++					drop_amount = 1;
++				}
++
++				// Send IACTION_DROP
++
++				// Check how many items can be dropped
++				drop_amount = stack_from.count = MYMIN(drop_amount, stack_from.count);
++				if(drop_amount == 0 || drop_amount > stack_from.count)
++					break;
++
++				infostream << "Handing IACTION_DROP to manager" << std::endl;
++
++				IDropAction *a = new IDropAction();
++				a->count = drop_amount;
++				a->from_inv = s.inventoryloc;
++				a->from_list = s.listname;
++				a->from_i = s.i;
++				m_invmgr->inventoryAction(a);
++
++			} while(0);
++		}
++
++
+ 	}
+ 
+ 	/* Mouse event other than movement, or crossing the border of inventory
+@@ -3200,8 +3277,8 @@
+ 
+ 		if (m_selected_item) {
+ 			inv_selected = m_invmgr->getInventory(m_selected_item->inventoryloc);
+-			sanity_check(inv_selected);
+-			sanity_check(inv_selected->getList(m_selected_item->listname) != NULL);
++			//sanity_check(inv_selected);
++			//sanity_check(inv_selected->getList(m_selected_item->listname) != NULL);
+ 		}
+ 
+ 		u32 s_count = 0;
+@@ -3314,7 +3391,7 @@
+ 					}
+ 				}
+ 			} else { // m_selected_item != NULL
+-				assert(m_selected_amount >= 1);
++				//assert(m_selected_amount >= 1);
+ 
+ 				if (s.isValid()) {
+ 					// Clicked a slot: move
+@@ -3374,13 +3451,14 @@
+ 			if (m_selected_item != NULL && s.isValid()) {
+ 				// Move 1 item
+ 				// TODO: middle mouse to move 10 items might be handy
+-				if (m_rmouse_auto_place) {
++				if (m_rmouse_auto_place && inv_selected) {
+ 					// Only move an item if the destination slot is empty
+ 					// or contains the same item type as what is going to be
+ 					// moved
+ 					InventoryList *list_from = inv_selected->getList(m_selected_item->listname);
+ 					InventoryList *list_to = list_s;
+-					assert(list_from && list_to);
++					if (!(list_from && list_to))
++						return false;
+ 					ItemStack stack_from = list_from->getItem(m_selected_item->i);
+ 					ItemStack stack_to = list_to->getItem(s.i);
+ 					if (stack_to.empty() || stack_to.name == stack_from.name)
+@@ -3390,16 +3468,19 @@
+ 		}
+ 
+ 		// Possibly send inventory action to server
+-		if (move_amount > 0) {
++		if (move_amount > 0 && inv_selected) {
+ 			// Send IACTION_MOVE
+ 
+-			assert(m_selected_item && m_selected_item->isValid());
+-			assert(s.isValid());
++			if (!(m_selected_item && m_selected_item->isValid()))
++				return false;
++			if (!s.isValid())
++				return false;
+ 
+-			assert(inv_selected && inv_s);
++			//assert(inv_selected && inv_s);
+ 			InventoryList *list_from = inv_selected->getList(m_selected_item->listname);
+ 			InventoryList *list_to = list_s;
+-			assert(list_from && list_to);
++			if (!(list_from && list_to))
++				return false;
+ 			ItemStack stack_from = list_from->getItem(m_selected_item->i);
+ 			ItemStack stack_to = list_to->getItem(s.i);
+ 
+@@ -3462,7 +3543,8 @@
+ 				if (!list_to)
+ 					break;
+ 				ItemStack stack_from = list_from->getItem(s.i);
+-				assert(shift_move_amount <= stack_from.count);
++				if(!(shift_move_amount <= stack_from.count))
++					break;
+ 				if (m_client->getProtoVersion() >= 25) {
+ 					infostream << "Handing IACTION_MOVE to manager" << std::endl;
+ 					IMoveAction *a = new IMoveAction();
+@@ -3504,15 +3586,19 @@
+ 
+ 			// Send IACTION_DROP
+ 
+-			assert(m_selected_item && m_selected_item->isValid());
+-			assert(inv_selected);
++			if (!(m_selected_item && m_selected_item->isValid()))
++				return false;
++			if (!inv_selected)
++				return false;
+ 			InventoryList *list_from = inv_selected->getList(m_selected_item->listname);
+-			assert(list_from);
++			if (!list_from)
++				return false;
+ 			ItemStack stack_from = list_from->getItem(m_selected_item->i);
+ 
+ 			// Check how many items can be dropped
+ 			drop_amount = stack_from.count = MYMIN(drop_amount, stack_from.count);
+-			assert(drop_amount > 0 && drop_amount <= m_selected_amount);
++			if (!(drop_amount > 0 && drop_amount <= m_selected_amount))
++				return false;
+ 			m_selected_amount -= drop_amount;
+ 
+ 			infostream << "Handing IACTION_DROP to manager" << std::endl;
+@@ -3527,8 +3613,10 @@
+ 
+ 			// Send IACTION_CRAFT
+ 
+-			assert(s.isValid());
+-			assert(inv_s);
++			if(!s.isValid())
++				return false;
++			if(!inv_s)
++				return false;
+ 
+ 			infostream << "Handing IACTION_CRAFT to manager" << std::endl;
+ 			ICraftAction *a = new ICraftAction();

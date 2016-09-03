@@ -1,0 +1,104 @@
+diff -ruN minetest-master/games/minimal/mods/default/init.lua minetest-freeminer/games/minimal/mods/default/init.lua
+--- minetest-master/games/minimal/mods/default/init.lua	2016-09-03 16:15:52.529778000 -0700
++++ minetest-freeminer/games/minimal/mods/default/init.lua	2016-09-03 15:43:59.642739000 -0700
+@@ -17,7 +17,7 @@
+ -- Set a noticeable inventory formspec for players
+ minetest.register_on_joinplayer(function(player)
+ 	local cb = function(player)
+-		minetest.chat_send_player(player:get_player_name(), "This is the [minimal] \"Minimal Development Test\" game. Use [minetest_game] for the real thing.")
++		minetest.chat_send_player(player:get_player_name(), "This is the [minimal] \"Minimal Development Test\" game. Use [default] for the real thing.")
+ 	end
+ 	minetest.after(2.0, cb, player)
+ end)
+@@ -732,6 +732,17 @@
+ 	}),
+ })
+ 
++minetest.register_node("default:dirt_with_snow", {
++	description = "Dirt with Snow",
++	tiles = {"default_snow.png", "default_dirt.png", "default_dirt.png^default_snow_side.png"},
++	is_ground_content = true,
++	groups = {crumbly=3, slippery=70},
++	drop = 'default:dirt',
++	sounds = default.node_sound_dirt_defaults({
++		footstep = {name="default_snow_footstep", gain=0.25},
++	}),
++})
++
+ minetest.register_node("default:dirt_with_grass_footsteps", {
+ 	description = "Dirt with grass and footsteps",
+ 	tiles ={"default_grass_footsteps.png", "default_dirt.png",
+@@ -966,6 +977,7 @@
+ 	},
+ 	alpha = WATER_ALPHA,
+ 	paramtype = "light",
++	paramtype2 = "flowingliquid",
+ 	walkable = false,
+ 	pointable = false,
+ 	diggable = false,
+@@ -1023,6 +1035,7 @@
+ 		},
+ 	},
+ 	paramtype = "light",
++	paramtype2 = "flowingliquid",
+ 	light_source = LIGHT_MAX - 1,
+ 	walkable = false,
+ 	pointable = false,
+@@ -1506,7 +1519,56 @@
+ 	sounds = default.node_sound_defaults(),
+ })
+ 
+---
++minetest.register_node("default:dirt_with_snow", {
++	description = "Dirt with Snow",
++	tiles = {"default_snow.png", "default_dirt.png", "default_dirt.png^default_snow_side.png"},
++	groups = {crumbly=3,soil=1},
++	drop = 'default:dirt',
++	sounds = default.node_sound_dirt_defaults(),
++})
++
++minetest.register_node("default:snow", {
++	description = "Snow",
++	tiles = {"default_snow.png"},
++	inventory_image = "default_snowball.png",
++	wield_image = "default_snowball.png",
++	paramtype = "light",
++	buildable_to = true,
++	drawtype = "nodebox",
++	node_box = {
++		type = "fixed",
++		fixed = {
++			{-0.5, -0.5, -0.5,  0.5, -0.5+2/16, 0.5},
++		},
++	},
++	groups = {crumbly=3,falling_node=1},
++	sounds = default.node_sound_dirt_defaults(),
++
++	on_construct = function(pos)
++		pos.y = pos.y - 1
++		if minetest.get_node(pos).name == "default:dirt_with_grass" then
++			minetest.set_node(pos, {name="default:dirt_with_snow"})
++		end
++	end,
++})
++
++minetest.register_node("default:snowblock", {
++	description = "Snow Block",
++	tiles = {"default_snow.png"},
++	groups = {crumbly=3},
++	sounds = default.node_sound_dirt_defaults(),
++})
++
++minetest.register_node("default:ice", {
++	description = "Ice",
++	tiles = {"default_ice.png"},
++	is_ground_content = false,
++	paramtype = "light",
++	melt = "default:water_source",
++	groups = {cracky=3, melt=3, slippery=90},
++	sounds = default.node_sound_glass_defaults(),
++})
++
+ -- Grow tree function
+ --
+ 

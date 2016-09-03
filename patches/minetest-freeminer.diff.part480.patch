@@ -1,0 +1,143 @@
+diff -ruN minetest-master/src/script/lua_api/l_object.cpp minetest-freeminer/src/script/lua_api/l_object.cpp
+--- minetest-master/src/script/lua_api/l_object.cpp	2016-09-03 16:15:52.689779000 -0700
++++ minetest-freeminer/src/script/lua_api/l_object.cpp	2016-09-03 15:43:59.822740000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++script/lua_api/l_object.cpp
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "lua_api/l_object.h"
+@@ -92,7 +95,10 @@
+ 	ServerActiveObject *obj = getobject(ref);
+ 	if (obj == NULL)
+ 		return NULL;
+-	if (obj->getType() != ACTIVEOBJECT_TYPE_LUAENTITY)
++	if (obj->getType() != ACTIVEOBJECT_TYPE_LUAENTITY &&
++		obj->getType() != ACTIVEOBJECT_TYPE_LUACREATURE &&
++		obj->getType() != ACTIVEOBJECT_TYPE_LUAITEM &&
++		obj->getType() != ACTIVEOBJECT_TYPE_LUAFALLING)
+ 		return NULL;
+ 	return (LuaEntitySAO*)obj;
+ }
+@@ -141,10 +147,13 @@
+ 	std::set<int>::iterator it;
+ 	for (it = child_ids.begin(); it != child_ids.end(); ++it) {
+ 		ServerActiveObject *child = env->getActiveObject(*it);
++		if (child)
+ 		child->setAttachment(0, "", v3f(0, 0, 0), v3f(0, 0, 0));
+ 	}
+ 
++/*
+ 	verbosestream<<"ObjectRef::l_remove(): id="<<co->getId()<<std::endl;
++*/
+ 	co->m_removed = true;
+ 	return 0;
+ }
+@@ -657,6 +666,7 @@
+ 	co->getAttachment(&parent_id, &bone, &position, &rotation);
+ 	if (parent_id) {
+ 		ServerActiveObject *old_parent = env->getActiveObject(parent_id);
++		if (old_parent)
+ 		old_parent->removeAttachmentChild(co->getId());
+ 	}
+ 
+@@ -693,7 +703,7 @@
+ 	if (!parent_id)
+ 		return 0;
+ 	ServerActiveObject *parent = env->getActiveObject(parent_id);
+-
++	if (parent)
+ 	getScriptApiBase(L)->objectrefGetOrCreate(L, parent);
+ 	lua_pushlstring(L, bone.c_str(), bone.size());
+ 	push_v3f(L, position);
+@@ -734,6 +744,7 @@
+ 	ObjectRef *ref = checkobject(L, 1);
+ 	ServerActiveObject *co = getobject(ref);
+ 	if (co == NULL) return 0;
++	auto lock = co->lock_unique_rec();
+ 	ObjectProperties *prop = co->accessObjectProperties();
+ 	if (!prop)
+ 		return 0;
+@@ -827,9 +838,17 @@
+ {
+ 	NO_MAP_LOCK_REQUIRED;
+ 	ObjectRef *ref = checkobject(L, 1);
++
++	v3f pos = checkFloatPos(L, 2);
++
++	PlayerSAO* ps = getplayersao(ref);
++	if (ps) {
++		ps->addSpeed(pos);
++		return 0;
++	}
++
+ 	LuaEntitySAO *co = getluaobject(ref);
+ 	if (co == NULL) return 0;
+-	v3f pos = checkFloatPos(L, 2);
+ 	// Do it
+ 	co->setVelocity(pos);
+ 	return 0;
+@@ -840,6 +859,16 @@
+ {
+ 	NO_MAP_LOCK_REQUIRED;
+ 	ObjectRef *ref = checkobject(L, 1);
++
++	{
++		PlayerSAO* co = getplayersao(ref);
++		if (co) {
++			v3f v = co->getPlayer()->getSpeed();
++			pushFloatPos(L, v);
++			return 1;
++		}
++	}
++
+ 	LuaEntitySAO *co = getluaobject(ref);
+ 	if (co == NULL) return 0;
+ 	// Do it
+@@ -989,7 +1018,7 @@
+ 		return 1;
+ 	}
+ 	// Do it
+-	lua_pushstring(L, player->getName());
++	lua_pushstring(L, player->getName().c_str());
+ 	return 1;
+ }
+ 
+@@ -1557,8 +1586,8 @@
+ 		return 0;
+ 
+ 	std::string name = lua_tostring(L, 2);
+-
+-	getServer(L)->hudSetHotbarImage(player, name);
++	auto items = lua_tonumber(L, 3);
++	getServer(L)->hudSetHotbarImage(player, name, items);
+ 	return 1;
+ }
+ 

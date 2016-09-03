@@ -1,0 +1,133 @@
+diff -ruN minetest-master/src/database-leveldb.cpp minetest-freeminer/src/database-leveldb.cpp
+--- minetest-master/src/database-leveldb.cpp	2016-09-03 16:15:52.489778000 -0700
++++ minetest-freeminer/src/database-leveldb.cpp	2016-09-03 15:43:59.502738000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++database-leveldb.cpp
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "config.h"
+@@ -22,8 +25,7 @@
+ #if USE_LEVELDB
+ 
+ #include "database-leveldb.h"
+-
+-#include "log.h"
++#include "log_types.h"
+ #include "filesys.h"
+ #include "exceptions.h"
+ #include "util/string.h"
+@@ -39,48 +41,49 @@
+ 
+ 
+ Database_LevelDB::Database_LevelDB(const std::string &savedir)
++	: m_database(savedir, "map")
+ {
+-	leveldb::Options options;
+-	options.create_if_missing = true;
+-	leveldb::Status status = leveldb::DB::Open(options,
+-		savedir + DIR_DELIM + "map.db", &m_database);
+-	ENSURE_STATUS_OK(status);
+ }
+ 
+ Database_LevelDB::~Database_LevelDB()
+ {
+-	delete m_database;
+ }
+ 
+ bool Database_LevelDB::saveBlock(const v3s16 &pos, const std::string &data)
+ {
+-	leveldb::Status status = m_database->Put(leveldb::WriteOptions(),
+-			i64tos(getBlockAsInteger(pos)), data);
+-	if (!status.ok()) {
+-		warningstream << "saveBlock: LevelDB error saving block "
+-			<< PP(pos) << ": " << status.ToString() << std::endl;
++	if (!m_database.put(getBlockAsString(pos), data)) {
++		warningstream << "WARNING: saveBlock: LevelDB error saving block "
++			<< pos << ": "<< m_database.get_error() << std::endl;
+ 		return false;
+ 	}
++	m_database.del(i64tos(getBlockAsInteger(pos))); // delete old format
+ 
+ 	return true;
+ }
+ 
+ void Database_LevelDB::loadBlock(const v3s16 &pos, std::string *block)
+ {
++/*
+ 	std::string datastr;
+-	leveldb::Status status = m_database->Get(leveldb::ReadOptions(),
+-		i64tos(getBlockAsInteger(pos)), &datastr);
++*/
+ 
++	m_database.get(getBlockAsString(pos), *block);
++	if (block->length())
++		return;
++
++	m_database.get(i64tos(getBlockAsInteger(pos)), *block);
++
++/*
+ 	*block = (status.ok()) ? datastr : "";
++*/
+ }
+ 
+ bool Database_LevelDB::deleteBlock(const v3s16 &pos)
+ {
+-	leveldb::Status status = m_database->Delete(leveldb::WriteOptions(),
+-			i64tos(getBlockAsInteger(pos)));
+-	if (!status.ok()) {
+-		warningstream << "deleteBlock: LevelDB error deleting block "
+-			<< PP(pos) << ": " << status.ToString() << std::endl;
++	auto ok = m_database.del(getBlockAsString(pos));
++	if (ok) {
++		warningstream << "WARNING: deleteBlock: LevelDB error deleting block "
++			<< (pos) << ": " << m_database.get_error() << std::endl;
+ 		return false;
+ 	}
+ 
+@@ -89,12 +92,16 @@
+ 
+ void Database_LevelDB::listAllLoadableBlocks(std::vector<v3s16> &dst)
+ {
+-	leveldb::Iterator* it = m_database->NewIterator(leveldb::ReadOptions());
++#if USE_LEVELDB
++	auto it = m_database.new_iterator();
++	if (!it)
++		return;
+ 	for (it->SeekToFirst(); it->Valid(); it->Next()) {
+-		dst.push_back(getIntegerAsBlock(stoi64(it->key().ToString())));
++		dst.push_back(getStringAsBlock(it->key().ToString()));
+ 	}
+ 	ENSURE_STATUS_OK(it->status());  // Check for any errors found during the scan
+ 	delete it;
++#endif
+ }
+ 
+ #endif // USE_LEVELDB

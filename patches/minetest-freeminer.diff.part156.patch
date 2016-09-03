@@ -1,0 +1,146 @@
+diff -ruN minetest-master/src/cavegen.cpp minetest-freeminer/src/cavegen.cpp
+--- minetest-master/src/cavegen.cpp	2016-09-03 16:15:52.521778000 -0700
++++ minetest-freeminer/src/cavegen.cpp	2016-09-03 15:43:59.638739000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++cavegen.cpp
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "util/numeric.h"
+@@ -25,6 +28,8 @@
+ #include "mapgen_v7.h"
+ #include "mg_biome.h"
+ #include "cavegen.h"
++#include "emerge.h"
++#include "environment.h"
+ 
+ static NoiseParams nparams_caveliquids(0, 1, v3f(150.0, 150.0, 150.0), 776, 3, 0.6, 2.0);
+ 
+@@ -354,14 +359,17 @@
+ 	MapNode airnode(CONTENT_AIR);
+ 	MapNode waternode(c_water_source);
+ 	MapNode lavanode(c_lava_source);
++	MapNode n_ice(c_ice);
+ 
+ 	v3s16 startp(orp.X, orp.Y, orp.Z);
+ 	startp += of;
+ 
+ 	float nval = NoisePerlin3D(np_caveliquids, startp.X,
+ 		startp.Y, startp.Z, seed);
++/*
+ 	MapNode liquidnode = (nval < 0.40f && node_max.Y < lava_depth) ?
+ 		lavanode : waternode;
++*/
+ 
+ 	v3f fp = orp + vec * f;
+ 	fp.X += 0.1f * ps->range(-10, 10);
+@@ -384,6 +392,9 @@
+ 
+ 			s16 si2 = rs / 2 - MYMAX(0, maxabsxz - rs / 7 - 1);
+ 
++			//fmtodomerge: s16 heat = mg->m_emerge->env->m_use_weather ? mg->m_emerge->env->getServerMap().updateBlockHeat(mg->m_emerge->env, v3POS(cp.X + x0, cp.Y + -si2, cp.Z + z0), nullptr, &mg->heat_cache) : 0;
++			s16 heat = 10;
++
+ 			for (s16 y0 = -si2; y0 <= si2; y0++) {
+ 				// Make better floors in small caves
+ 				if (flat_cave_floor && y0 <= -rs / 2 && rs <= 7)
+@@ -407,11 +418,15 @@
+ 					continue;
+ 
+ 				if (large_cave) {
++
++					MapNode n_water_or_ice = (heat < 0 && (p.Y > water_level + heat/4 || p.Y > startp.Y - 2 + heat/4)) ? n_ice : waternode;
++					MapNode liquidnode = (nval < 0.40 && node_max.Y < lava_depth ) ? lavanode : n_water_or_ice;
++
+ 					int full_ymin = node_min.Y - MAP_BLOCKSIZE;
+ 					int full_ymax = node_max.Y + MAP_BLOCKSIZE;
+ 
+ 					if (flooded && full_ymin < water_level && full_ymax > water_level)
+-						vm->m_data[i] = (p.Y <= water_level) ? waternode : airnode;
++						vm->m_data[i] = (p.Y <= water_level) ? n_water_or_ice : airnode;
+ 					else if (flooded && full_ymax < water_level)
+ 						vm->m_data[i] = (p.Y < startp.Y - 4) ? liquidnode : airnode;
+ 					else
+@@ -668,6 +683,8 @@
+ 	MapNode airnode(CONTENT_AIR);
+ 	MapNode waternode(c_water_source);
+ 	MapNode lavanode(c_lava_source);
++	MapNode n_ice(c_ice);
++	bool flooded = ps->range(1, 2) == 2;
+ 
+ 	v3s16 startp(orp.X, orp.Y, orp.Z);
+ 	startp += of;
+@@ -692,6 +709,10 @@
+ 
+ 			s16 maxabsxz = MYMAX(abs(x0), abs(z0));
+ 			s16 si2 = rs / 2 - MYMAX(0, maxabsxz - rs / 7 - 1);
++
++			//fmtodomerge: s16 heat = mg->m_emerge->env->m_use_weather ? mg->m_emerge->env->getServerMap().updateBlockHeat(mg->m_emerge->env, v3POS(cp.X + x0, cp.Y + -si2, cp.Z + z0), nullptr, &mg->heat_cache) : 0;
++			s16 heat = 10;
++
+ 			for (s16 y0 = -si2; y0 <= si2; y0++) {
+ 				if (large_cave_is_flat) {
+ 					// Make large caves not so tall
+@@ -707,23 +728,31 @@
+ 
+ 				u32 i = vm->m_area.index(p);
+ 				content_t c = vm->m_data[i].getContent();
+-				if (!ndef->get(c).is_ground_content)
++				if (!c || c == CONTENT_AIR || !ndef->get(c).is_ground_content)
+ 					continue;
+ 
+ 				if (large_cave) {
+ 					int full_ymin = node_min.Y - MAP_BLOCKSIZE;
+ 					int full_ymax = node_max.Y + MAP_BLOCKSIZE;
+ 
+-					if (full_ymin < water_level && full_ymax > water_level) {
+-						vm->m_data[i] = (p.Y <= water_level) ? waternode : airnode;
+-					} else if (full_ymax < water_level) {
++					bool protect_huge = vm->m_flags[i] & VOXELFLAG_CHECKED2;
++
++					if (flooded && full_ymin < water_level && full_ymax > water_level) {
++						if (!protect_huge) {
++							MapNode n_water_or_ice = (heat < 0 && (p.Y > water_level + heat/4 || p.Y > startp.Y - 2 + heat/4)) ? n_ice : waternode;
++							vm->m_data[i] = (p.Y <= water_level) ? n_water_or_ice : airnode;
++						}
++					} else if (flooded && full_ymax < water_level) {
++						if (!protect_huge)
+ 						vm->m_data[i] = (p.Y < startp.Y - 2) ? lavanode : airnode;
+ 					} else {
+ 						vm->m_data[i] = airnode;
+ 					}
+ 				} else {
++/*
+ 					if (c == CONTENT_IGNORE || c == CONTENT_AIR)
+ 						continue;
++*/
+ 
+ 					vm->m_data[i] = airnode;
+ 					vm->m_flags[i] |= VMANIP_FLAG_CAVE;

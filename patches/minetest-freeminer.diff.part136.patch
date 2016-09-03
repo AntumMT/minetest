@@ -1,0 +1,72 @@
+diff -ruN minetest-master/doc/minetestserver.6 minetest-freeminer/doc/minetestserver.6
+--- minetest-master/doc/minetestserver.6	2016-09-03 16:15:52.649779000 -0700
++++ minetest-freeminer/doc/minetestserver.6	1969-12-31 16:00:00.000000000 -0800
+@@ -1,2 +0,0 @@
+-.so man6/minetest.6
+-
+Binary files minetest-master/fonts/lucida_sans_100.png and minetest-freeminer/fonts/lucida_sans_100.png differ
+Binary files minetest-master/fonts/lucida_sans_10.xml and minetest-freeminer/fonts/lucida_sans_10.xml differ
+Binary files minetest-master/fonts/lucida_sans_110.png and minetest-freeminer/fonts/lucida_sans_110.png differ
+Binary files minetest-master/fonts/lucida_sans_11.xml and minetest-freeminer/fonts/lucida_sans_11.xml differ
+Binary files minetest-master/fonts/lucida_sans_120.png and minetest-freeminer/fonts/lucida_sans_120.png differ
+Binary files minetest-master/fonts/lucida_sans_12.xml and minetest-freeminer/fonts/lucida_sans_12.xml differ
+Binary files minetest-master/fonts/lucida_sans_140.png and minetest-freeminer/fonts/lucida_sans_140.png differ
+Binary files minetest-master/fonts/lucida_sans_14.xml and minetest-freeminer/fonts/lucida_sans_14.xml differ
+Binary files minetest-master/fonts/lucida_sans_160.png and minetest-freeminer/fonts/lucida_sans_160.png differ
+Binary files minetest-master/fonts/lucida_sans_16.xml and minetest-freeminer/fonts/lucida_sans_16.xml differ
+Binary files minetest-master/fonts/lucida_sans_180.png and minetest-freeminer/fonts/lucida_sans_180.png differ
+Binary files minetest-master/fonts/lucida_sans_18.xml and minetest-freeminer/fonts/lucida_sans_18.xml differ
+Binary files minetest-master/fonts/lucida_sans_200.png and minetest-freeminer/fonts/lucida_sans_200.png differ
+Binary files minetest-master/fonts/lucida_sans_20.xml and minetest-freeminer/fonts/lucida_sans_20.xml differ
+Binary files minetest-master/fonts/lucida_sans_220.png and minetest-freeminer/fonts/lucida_sans_220.png differ
+Binary files minetest-master/fonts/lucida_sans_22.xml and minetest-freeminer/fonts/lucida_sans_22.xml differ
+Binary files minetest-master/fonts/lucida_sans_240.png and minetest-freeminer/fonts/lucida_sans_240.png differ
+Binary files minetest-master/fonts/lucida_sans_24.xml and minetest-freeminer/fonts/lucida_sans_24.xml differ
+Binary files minetest-master/fonts/lucida_sans_260.png and minetest-freeminer/fonts/lucida_sans_260.png differ
+Binary files minetest-master/fonts/lucida_sans_26.xml and minetest-freeminer/fonts/lucida_sans_26.xml differ
+Binary files minetest-master/fonts/lucida_sans_280.png and minetest-freeminer/fonts/lucida_sans_280.png differ
+Binary files minetest-master/fonts/lucida_sans_28.xml and minetest-freeminer/fonts/lucida_sans_28.xml differ
+Binary files minetest-master/fonts/lucida_sans_360.png and minetest-freeminer/fonts/lucida_sans_360.png differ
+Binary files minetest-master/fonts/lucida_sans_36.xml and minetest-freeminer/fonts/lucida_sans_36.xml differ
+Binary files minetest-master/fonts/lucida_sans_40.png and minetest-freeminer/fonts/lucida_sans_40.png differ
+Binary files minetest-master/fonts/lucida_sans_480.png and minetest-freeminer/fonts/lucida_sans_480.png differ
+Binary files minetest-master/fonts/lucida_sans_48.xml and minetest-freeminer/fonts/lucida_sans_48.xml differ
+Binary files minetest-master/fonts/lucida_sans_4.xml and minetest-freeminer/fonts/lucida_sans_4.xml differ
+Binary files minetest-master/fonts/lucida_sans_560.png and minetest-freeminer/fonts/lucida_sans_560.png differ
+Binary files minetest-master/fonts/lucida_sans_56.xml and minetest-freeminer/fonts/lucida_sans_56.xml differ
+Binary files minetest-master/fonts/lucida_sans_60.png and minetest-freeminer/fonts/lucida_sans_60.png differ
+Binary files minetest-master/fonts/lucida_sans_6.xml and minetest-freeminer/fonts/lucida_sans_6.xml differ
+Binary files minetest-master/fonts/lucida_sans_80.png and minetest-freeminer/fonts/lucida_sans_80.png differ
+Binary files minetest-master/fonts/lucida_sans_8.xml and minetest-freeminer/fonts/lucida_sans_8.xml differ
+Binary files minetest-master/fonts/lucida_sans_90.png and minetest-freeminer/fonts/lucida_sans_90.png differ
+Binary files minetest-master/fonts/lucida_sans_9.xml and minetest-freeminer/fonts/lucida_sans_9.xml differ
+Binary files minetest-master/fonts/mono_dejavu_sans_100.png and minetest-freeminer/fonts/mono_dejavu_sans_100.png differ
+Binary files minetest-master/fonts/mono_dejavu_sans_10.xml and minetest-freeminer/fonts/mono_dejavu_sans_10.xml differ
+Binary files minetest-master/fonts/mono_dejavu_sans_110.png and minetest-freeminer/fonts/mono_dejavu_sans_110.png differ
+Binary files minetest-master/fonts/mono_dejavu_sans_11.xml and minetest-freeminer/fonts/mono_dejavu_sans_11.xml differ
+Binary files minetest-master/fonts/mono_dejavu_sans_120.png and minetest-freeminer/fonts/mono_dejavu_sans_120.png differ
+Binary files minetest-master/fonts/mono_dejavu_sans_12.xml and minetest-freeminer/fonts/mono_dejavu_sans_12.xml differ
+Binary files minetest-master/fonts/mono_dejavu_sans_140.png and minetest-freeminer/fonts/mono_dejavu_sans_140.png differ
+Binary files minetest-master/fonts/mono_dejavu_sans_14.xml and minetest-freeminer/fonts/mono_dejavu_sans_14.xml differ
+Binary files minetest-master/fonts/mono_dejavu_sans_160.png and minetest-freeminer/fonts/mono_dejavu_sans_160.png differ
+Binary files minetest-master/fonts/mono_dejavu_sans_16.xml and minetest-freeminer/fonts/mono_dejavu_sans_16.xml differ
+Binary files minetest-master/fonts/mono_dejavu_sans_180.png and minetest-freeminer/fonts/mono_dejavu_sans_180.png differ
+Binary files minetest-master/fonts/mono_dejavu_sans_18.xml and minetest-freeminer/fonts/mono_dejavu_sans_18.xml differ
+Binary files minetest-master/fonts/mono_dejavu_sans_200.png and minetest-freeminer/fonts/mono_dejavu_sans_200.png differ
+Binary files minetest-master/fonts/mono_dejavu_sans_20.xml and minetest-freeminer/fonts/mono_dejavu_sans_20.xml differ
+Binary files minetest-master/fonts/mono_dejavu_sans_220.png and minetest-freeminer/fonts/mono_dejavu_sans_220.png differ
+Binary files minetest-master/fonts/mono_dejavu_sans_22.xml and minetest-freeminer/fonts/mono_dejavu_sans_22.xml differ
+Binary files minetest-master/fonts/mono_dejavu_sans_240.png and minetest-freeminer/fonts/mono_dejavu_sans_240.png differ
+Binary files minetest-master/fonts/mono_dejavu_sans_24.xml and minetest-freeminer/fonts/mono_dejavu_sans_24.xml differ
+Binary files minetest-master/fonts/mono_dejavu_sans_260.png and minetest-freeminer/fonts/mono_dejavu_sans_260.png differ
+Binary files minetest-master/fonts/mono_dejavu_sans_26.xml and minetest-freeminer/fonts/mono_dejavu_sans_26.xml differ
+Binary files minetest-master/fonts/mono_dejavu_sans_280.png and minetest-freeminer/fonts/mono_dejavu_sans_280.png differ
+Binary files minetest-master/fonts/mono_dejavu_sans_28.xml and minetest-freeminer/fonts/mono_dejavu_sans_28.xml differ
+Binary files minetest-master/fonts/mono_dejavu_sans_40.png and minetest-freeminer/fonts/mono_dejavu_sans_40.png differ
+Binary files minetest-master/fonts/mono_dejavu_sans_4.xml and minetest-freeminer/fonts/mono_dejavu_sans_4.xml differ
+Binary files minetest-master/fonts/mono_dejavu_sans_60.png and minetest-freeminer/fonts/mono_dejavu_sans_60.png differ
+Binary files minetest-master/fonts/mono_dejavu_sans_6.xml and minetest-freeminer/fonts/mono_dejavu_sans_6.xml differ
+Binary files minetest-master/fonts/mono_dejavu_sans_80.png and minetest-freeminer/fonts/mono_dejavu_sans_80.png differ
+Binary files minetest-master/fonts/mono_dejavu_sans_8.xml and minetest-freeminer/fonts/mono_dejavu_sans_8.xml differ
+Binary files minetest-master/fonts/mono_dejavu_sans_90.png and minetest-freeminer/fonts/mono_dejavu_sans_90.png differ
+Binary files minetest-master/fonts/mono_dejavu_sans_9.xml and minetest-freeminer/fonts/mono_dejavu_sans_9.xml differ

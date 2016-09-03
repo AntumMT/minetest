@@ -1,0 +1,95 @@
+diff -ruN minetest-master/src/drawscene.cpp minetest-freeminer/src/drawscene.cpp
+--- minetest-master/src/drawscene.cpp	2016-09-03 16:15:52.553779000 -0700
++++ minetest-freeminer/src/drawscene.cpp	2016-09-03 15:43:59.650739000 -0700
+@@ -18,6 +18,8 @@
+ */
+ 
+ #include "drawscene.h"
++#include "log_types.h"
++#include "minimap.h"
+ #include "settings.h"
+ #include "clouds.h"
+ #include "clientmap.h"
+@@ -25,6 +27,8 @@
+ #include "fontengine.h"
+ #include "guiscalingfilter.h"
+ 
++#include "touchscreengui.h"
++
+ typedef enum {
+ 	LEFT = -1,
+ 	RIGHT = 1,
+@@ -394,7 +398,10 @@
+ 			+ camera.getCameraNode()->getAbsolutePosition();
+ 
+ 	//Left eye...
++// fmTODO: fixme:
++#if IRRLICHT_VERSION_10000 < 10900
+ 	driver->setRenderTarget(irr::video::ERT_STEREO_LEFT_BUFFER);
++#endif
+ 
+ 	irr::core::vector3df leftEye;
+ 	irr::core::matrix4 leftMove;
+@@ -422,7 +429,10 @@
+ 	guienv->drawAll();
+ 
+ 	//Right eye...
++// fmTODO: fixme:
++#if IRRLICHT_VERSION_10000 < 10900
+ 	driver->setRenderTarget(irr::video::ERT_STEREO_RIGHT_BUFFER);
++#endif
+ 
+ 	irr::core::vector3df rightEye;
+ 	irr::core::matrix4 rightMove;
+@@ -458,6 +468,13 @@
+ 		Client &client, gui::IGUIEnvironment *guienv)
+ {
+ 	driver->setTransform(video::ETS_WORLD, core::IdentityMatrix);
++
++/*
++#if !defined(NDEBUG)
++	client.getEnv().getClientMap().renderBlockBoundaries(client.getEnv().getClientMap().m_block_boundary);
++#endif
++*/
++
+ 	if (show_hud) {
+ 		hud.drawSelectionMesh();
+ 		if (draw_wield_tool) {
+@@ -482,10 +499,10 @@
+ 			(camera.getCameraMode() != CAMERA_MODE_THIRD_FRONT));
+ 
+ #ifdef HAVE_TOUCHSCREENGUI
+-	try {
+-		draw_crosshair = !g_settings->getBool("touchtarget");
++	if (g_touchscreengui) {
++	static const auto touchtarget = g_settings->getBool("touchtarget");
++	draw_crosshair = !touchtarget;
+ 	}
+-	catch(SettingNotFoundException) {}
+ #endif
+ 
+ 	std::string draw_mode = g_settings->get("3d_mode");
+@@ -554,6 +571,7 @@
+ 	timer.stop(true);
+ }
+ 
++static std::wstring text_old;
+ /*
+ 	Draws a screen with a single text on it.
+ 	Text will be removed when the screen is drawn the next time.
+@@ -563,6 +581,15 @@
+ 		gui::IGUIEnvironment* guienv, float dtime, int percent, bool clouds )
+ {
+ 	video::IVideoDriver* driver    = device->getVideoDriver();
++
++	if (device->getVideoDriver()->getDriverType() == video::EDT_NULL) {
++		if (text != text_old) {
++			actionstream<<" ... "<< text << std::endl;
++			text_old = text;
++		}
++		return;
++	}
++
+ 	v2u32 screensize               = porting::getWindowSize();
+ 
+ 	v2s32 textsize(g_fontengine->getTextWidth(text), g_fontengine->getLineHeight());

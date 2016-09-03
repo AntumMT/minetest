@@ -1,0 +1,20 @@
+diff -ruN minetest-master/build/android_fm/build.xml minetest-freeminer/build/android_fm/build.xml
+--- minetest-master/build/android_fm/build.xml	1969-12-31 16:00:00.000000000 -0800
++++ minetest-freeminer/build/android_fm/build.xml	2016-09-03 15:43:59.906741000 -0700
+@@ -0,0 +1,16 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<project name="freeminer" default="help">
++	<property file="local.properties" />
++	<property file="ant.properties" />
++	<property environment="env" />
++	<condition property="sdk.dir" value="${env.ANDROID_HOME}">
++		<isset property="env.ANDROID_HOME" />
++	</condition>
++	<loadproperties srcFile="project.properties" />
++	<fail
++		message="sdk.dir is missing. Make sure to generate local.properties using 'android update project' or to inject it through the ANDROID_HOME environment variable."
++		unless="sdk.dir"
++	/>
++	<import file="custom_rules.xml" optional="true" />
++	<import file="${sdk.dir}/tools/ant/build.xml" />
++</project>

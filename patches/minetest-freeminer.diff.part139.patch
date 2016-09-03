@@ -1,0 +1,38 @@
+diff -ruN minetest-master/games/minimal/mods/default/mapgen.lua minetest-freeminer/games/minimal/mods/default/mapgen.lua
+--- minetest-master/games/minimal/mods/default/mapgen.lua	2016-09-03 16:15:52.569779000 -0700
++++ minetest-freeminer/games/minimal/mods/default/mapgen.lua	2016-09-03 15:43:59.726739000 -0700
+@@ -91,6 +91,29 @@
+ 	y_max          = -64,
+ })
+ 
++-- for float islands and far scaled
++minetest.register_ore({
++	ore_type       = "scatter",
++	ore            = "default:stone_with_coal",
++	wherein        = "default:stone",
++	clust_scarcity = 8*8*8,
++	clust_num_ores = 5,
++	clust_size     = 3,
++	height_min     = 200,
++	height_max     = 31000,
++})
++
++minetest.register_ore({
++	ore_type       = "scatter",
++	ore            = "default:stone_with_iron",
++	wherein        = "default:stone",
++	clust_scarcity = 9*9*9,
++	clust_num_ores = 5,
++	clust_size     = 3,
++	height_min     = 200,
++	height_max     = 31000,
++})
++
+ 
+ --
+ -- Register biomes for biome API
+Binary files minetest-master/games/minimal/mods/default/textures/default_ice.png and minetest-freeminer/games/minimal/mods/default/textures/default_ice.png differ
+Binary files minetest-master/games/minimal/mods/default/textures/default_lamp.png and minetest-freeminer/games/minimal/mods/default/textures/default_lamp.png differ
+Binary files minetest-master/games/minimal/mods/default/textures/default_snowball.png and minetest-freeminer/games/minimal/mods/default/textures/default_snowball.png differ
+Binary files minetest-master/games/minimal/mods/default/textures/default_snow.png and minetest-freeminer/games/minimal/mods/default/textures/default_snow.png differ
+Binary files minetest-master/games/minimal/mods/default/textures/default_snow_side.png and minetest-freeminer/games/minimal/mods/default/textures/default_snow_side.png differ

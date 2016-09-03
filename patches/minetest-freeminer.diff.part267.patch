@@ -1,0 +1,275 @@
+diff -ruN minetest-master/src/guiChatConsole.cpp minetest-freeminer/src/guiChatConsole.cpp
+--- minetest-master/src/guiChatConsole.cpp	2016-09-03 16:15:52.557779000 -0700
++++ minetest-freeminer/src/guiChatConsole.cpp	2016-09-03 15:43:59.654739000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++guiChatConsole.cpp
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "guiChatConsole.h"
+@@ -27,7 +30,7 @@
+ #include "porting.h"
+ #include "client/tile.h"
+ #include "fontengine.h"
+-#include "log.h"
++#include "log_types.h"
+ #include "gettext.h"
+ #include <string>
+ 
+@@ -116,7 +119,7 @@
+ 		m_font->drop();
+ }
+ 
+-void GUIChatConsole::openConsole(f32 height)
++void GUIChatConsole::openConsole(float height)
+ {
+ 	m_open = true;
+ 	m_desired_height_fraction = height;
+@@ -150,6 +153,13 @@
+ 	closeConsole();
+ 	m_height = 0;
+ 	recalculateConsolePosition();
++
++	// Erase prompt if there's no text or save it to history
++	ChatPrompt& prompt = m_chat_backend->getPrompt();
++	std::wstring prompt_text = prompt.getVisiblePortion();
++	if(prompt_text.size() >= 3)
++		m_chat_backend->getPrompt().historyPush(prompt_text.substr(1,-1));
++	m_chat_backend->getPrompt().clear();
+ }
+ 
+ f32 GUIChatConsole::getDesiredHeight() const
+@@ -322,6 +332,8 @@
+ 	if (m_font == NULL)
+ 		return;
+ 
++	//fmold: irr::gui::CGUITTFont *tmp = static_cast<irr::gui::CGUITTFont*>(m_font);
++
+ 	ChatBuffer& buf = m_chat_backend->getConsoleBuffer();
+ 	for (u32 row = 0; row < buf.getRows(); ++row)
+ 	{
+@@ -340,8 +352,6 @@
+ 			s32 x = (fragment.column + 1) * m_fontsize.X;
+ 			core::rect<s32> destrect(
+ 				x, y, x + m_fontsize.X * fragment.text.size(), y + m_fontsize.Y);
+-
+-
+ 			#if USE_FREETYPE
+ 			// Draw colored text if FreeType is enabled
+ 				irr::gui::CGUITTFont *tmp = static_cast<irr::gui::CGUITTFont*>(m_font);
+@@ -420,16 +430,58 @@
+ 
+ }
+ 
++void GUIChatConsole::setPrompt(const std::wstring& input) {
++	m_chat_backend->getPrompt().cursorOperation(
++			ChatPrompt::CURSOROP_DELETE,
++			ChatPrompt::CURSOROP_DIR_LEFT,
++			ChatPrompt::CURSOROP_SCOPE_LINE);
++	for (unsigned int i = 0; i < input.size(); i++) {
++		m_chat_backend->getPrompt().input(input[i]);
++	}
++}
++
++
++bool GUIChatConsole::getAndroidUIInput() {
++#ifdef __ANDROID__
++	if (porting::getInputDialogState() == 0) {
++		std::string text = porting::getInputDialogValue();
++		std::wstring wtext = narrow_to_wide(text);
++		//errorstream<<"GUIChatConsole::getAndroidUIInput() text=["<<text<<"] "<<std::endl;
++		m_chat_backend->getPrompt().input(wtext);
++		//std::wstring wrtext = .submit();
++		//m_client->typeChatMessage(wide_to_narrow(wrtext));
++		auto & prompt = m_chat_backend->getPrompt();
++		prompt.addToHistory(prompt.getLine());
++		m_client->typeChatMessage(wide_to_utf8(prompt.replace(L"")));
++
++		if (m_close_on_enter) {
++			closeConsole();
++			//Environment->removeFocus(this);
++		}
++
++		return true;
++	}
++#endif
++	return false;
++}
++
+ bool GUIChatConsole::OnEvent(const SEvent& event)
+ {
+ 
+ 	ChatPrompt &prompt = m_chat_backend->getPrompt();
+ 
++	//errorstream << "cgc:event eventtype=" << (int)event.EventType << " pd=" << event.KeyInput.PressedDown << " key="<<(int)event.KeyInput.Key << " char=" <<  (int)event.KeyInput.Char<<std::endl;
++
+ 	if(event.EventType == EET_KEY_INPUT_EVENT && event.KeyInput.PressedDown)
+ 	{
++		KeyPress kp(event.KeyInput);
+ 		// Key input
+-		if(KeyPress(event.KeyInput) == getKeySetting("keymap_console"))
++		if(kp == getKeySetting("keymap_console"))
+ 		{
++/* old fm
++			closeConsoleAtOnce();
++			Environment->removeFocus(this);
++*/
+ 			closeConsole();
+ 
+ 			// inhibit open so the_game doesn't reopen immediately
+@@ -437,7 +489,7 @@
+ 			m_close_on_enter = false;
+ 			return true;
+ 		}
+-		else if(event.KeyInput.Key == KEY_ESCAPE)
++		else if ( (kp == EscapeKey || kp == CancelKey) && ((int)event.KeyInput.Key == (int)event.KeyInput.Char) )
+ 		{
+ 			closeConsoleAtOnce();
+ 			m_close_on_enter = false;
+@@ -445,42 +497,51 @@
+ 			m_open_inhibited = 1; // so the ESCAPE button doesn't open the "pause menu"
+ 			return true;
+ 		}
+-		else if(event.KeyInput.Key == KEY_PRIOR)
++		else if(event.KeyInput.Key == KEY_PRIOR && event.KeyInput.Char == 0)
+ 		{
+ 			m_chat_backend->scrollPageUp();
+ 			return true;
+ 		}
+-		else if(event.KeyInput.Key == KEY_NEXT)
++		else if(event.KeyInput.Key == KEY_NEXT && event.KeyInput.Char == 0)
+ 		{
+ 			m_chat_backend->scrollPageDown();
+ 			return true;
+ 		}
+ 		else if(event.KeyInput.Key == KEY_RETURN)
+ 		{
++/* old fm
++			std::string text = wide_to_narrow(m_chat_backend->getPrompt().submit());
++			m_client->typeChatMessage(text);
++
++			if (m_close_on_enter) {
++				closeConsole();
++				Environment->removeFocus(this);
++*/
++
+ 			prompt.addToHistory(prompt.getLine());
+ 			std::wstring text = prompt.replace(L"");
+-			m_client->typeChatMessage(text);
++			m_client->typeChatMessage(wide_to_utf8(text));
+ 			if (m_close_on_enter) {
+ 				closeConsoleAtOnce();
+ 				m_close_on_enter = false;
+ 			}
+ 			return true;
+ 		}
+-		else if(event.KeyInput.Key == KEY_UP)
++		else if(event.KeyInput.Key == KEY_UP && event.KeyInput.Char == 0)
+ 		{
+ 			// Up pressed
+ 			// Move back in history
+ 			prompt.historyPrev();
+ 			return true;
+ 		}
+-		else if(event.KeyInput.Key == KEY_DOWN)
++		else if(event.KeyInput.Key == KEY_DOWN && event.KeyInput.Char == 0)
+ 		{
+ 			// Down pressed
+ 			// Move forward in history
+ 			prompt.historyNext();
+ 			return true;
+ 		}
+-		else if(event.KeyInput.Key == KEY_LEFT || event.KeyInput.Key == KEY_RIGHT)
++		else if((event.KeyInput.Key == KEY_LEFT || event.KeyInput.Key == KEY_RIGHT) && event.KeyInput.Char == 0)
+ 		{
+ 			// Left/right pressed
+ 			// Move/select character/word to the left depending on control and shift keys
+@@ -496,7 +557,7 @@
+ 			prompt.cursorOperation(op, dir, scope);
+ 			return true;
+ 		}
+-		else if(event.KeyInput.Key == KEY_HOME)
++		else if(event.KeyInput.Key == KEY_HOME && event.KeyInput.Char == 0)
+ 		{
+ 			// Home pressed
+ 			// move to beginning of line
+@@ -506,7 +567,7 @@
+ 				ChatPrompt::CURSOROP_SCOPE_LINE);
+ 			return true;
+ 		}
+-		else if(event.KeyInput.Key == KEY_END)
++		else if(event.KeyInput.Key == KEY_END && event.KeyInput.Char == 0)
+ 		{
+ 			// End pressed
+ 			// move to end of line
+@@ -530,7 +591,7 @@
+ 				scope);
+ 			return true;
+ 		}
+-		else if(event.KeyInput.Key == KEY_DELETE)
++		else if(event.KeyInput.Key == KEY_DELETE && (event.KeyInput.Char == 0 || event.KeyInput.Char == 127))
+ 		{
+ 			// Delete or Ctrl-Delete pressed
+ 			// delete character / word to the right
+@@ -561,7 +622,11 @@
+ 			if (prompt.getCursorLength() <= 0)
+ 				return true;
+ 			std::wstring wselected = prompt.getSelection();
++/*
+ 			std::string selected(wselected.begin(), wselected.end());
++*/
++			auto selected = wide_to_utf8(wselected);
++
+ 			Environment->getOSOperator()->copyToClipboard(selected.c_str());
+ 			return true;
+ 		}
+@@ -580,8 +645,13 @@
+ 			const c8 *text = os_operator->getTextFromClipboard();
+ 			if (!text)
+ 				return true;
++
++			prompt.input(utf8_to_wide(std::string(text)));
++
++/*
+ 			std::basic_string<unsigned char> str((const unsigned char*)text);
+ 			prompt.input(std::wstring(str.begin(), str.end()));
++*/
+ 			return true;
+ 		}
+ 		else if(event.KeyInput.Key == KEY_KEY_X && event.KeyInput.Control)
+@@ -630,7 +700,7 @@
+ 		}
+ 		else if(event.KeyInput.Char != 0 && !event.KeyInput.Control)
+ 		{
+-			#if (defined(__linux__))
++			#if (defined(__linux__) || defined(__FreeBSD__)) and IRRLICHT_VERSION_10000 < 10900
+ 				wchar_t wc = L'_';
+ 				mbtowc( &wc, (char *) &event.KeyInput.Char, sizeof(event.KeyInput.Char) );
+ 				prompt.input(wc);

@@ -1,0 +1,87 @@
+diff -ruN minetest-master/po/ja/minetest.po minetest-freeminer/po/ja/minetest.po
+--- minetest-master/po/ja/minetest.po	2016-09-03 16:15:52.465778000 -0700
++++ minetest-freeminer/po/ja/minetest.po	2016-09-03 15:43:59.486738000 -0700
+@@ -1,6 +1,6 @@
+ msgid ""
+ msgstr ""
+-"Project-Id-Version: minetest\n"
++"Project-Id-Version: freeminer\n"
+ "Report-Msgid-Bugs-To: \n"
+ "POT-Creation-Date: 2016-08-30 06:18+0200\n"
+ "PO-Revision-Date: 2016-08-17 07:33+0000\n"
+@@ -217,10 +217,6 @@
+ msgstr "参照"
+ 
+ #: builtin/mainmenu/dlg_settings_advanced.lua
+-msgid "Disabled"
+-msgstr "無効"
+-
+-#: builtin/mainmenu/dlg_settings_advanced.lua
+ msgid "Edit"
+ msgstr "編集"
+ 
+@@ -280,10 +276,6 @@
+ msgstr "場所を選択"
+ 
+ #: builtin/mainmenu/dlg_settings_advanced.lua
+-msgid "Show technical names"
+-msgstr "パラメータ名を表示"
+-
+-#: builtin/mainmenu/dlg_settings_advanced.lua
+ msgid "The value must be greater than $1."
+ msgstr "値は$1より大きくなければなりません。"
+ 
+@@ -510,6 +502,17 @@
+ msgstr "8倍"
+ 
+ #: builtin/mainmenu/tab_settings.lua
++msgid "GUI scale factor"
++msgstr "メニューの大きさ"
++
++msgid "Farmesh (dev)"
++msgstr "遠くのメッシュ(開発版)"
++
++#, fuzzy
++msgid "Disabled"
++msgstr "無効"
++
++#, fuzzy
+ msgid "Advanced Settings"
+ msgstr "詳細設定"
+ 
+@@ -601,6 +604,25 @@
+ msgid "Settings"
+ msgstr "設定"
+ 
++msgid "Preload item visuals"
++msgstr "アイテムの外観をプリロード"
++
++msgid "Real Liquid"
++msgstr "リアルな液体"
++
++msgid "Weather"
++msgstr "天気"
++
++msgid "Mini map (dev)"
++msgstr "ミニマップ(開発版)"
++
++msgid "Hotbar Cycling"
++msgstr "ホットバーのサイクル"
++
++#, fuzzy
++msgid "Show technical names"
++msgstr "パラメータ名を表示"
++
+ #: builtin/mainmenu/tab_settings.lua src/settings_translation_file.cpp
+ msgid "Shaders"
+ msgstr "シェーダー"
+@@ -883,6 +905,9 @@
+ msgid "Proceed"
+ msgstr "決定"
+ 
++msgid "Player list"
++msgstr "プレイヤーリスト"
++
+ #: src/guiKeyChangeMenu.cpp
+ msgid "\"Use\" = climb down"
+ msgstr "「使用」で降りる"

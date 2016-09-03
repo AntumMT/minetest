@@ -1,0 +1,39 @@
+diff -ruN minetest-master/builtin/mainmenu/dlg_settings_advanced.lua minetest-freeminer/builtin/mainmenu/dlg_settings_advanced.lua
+--- minetest-master/builtin/mainmenu/dlg_settings_advanced.lua	2016-09-03 16:15:52.573779000 -0700
++++ minetest-freeminer/builtin/mainmenu/dlg_settings_advanced.lua	2016-09-03 15:43:59.914741000 -0700
+@@ -81,7 +81,7 @@
+ 	end
+ 
+ 	if readable_name == "" then
+-		readable_name = nil
++		readable_name = name
+ 	end
+ 	local remaining_line = line:sub(first_part:len() + 1)
+ 
+@@ -134,6 +134,8 @@
+ 	end
+ 
+ 	if setting_type == "bool" then
++		if remaining_line == "0" then remaining_line = "false" end
++		if remaining_line == "1" then remaining_line = "true" end
+ 		if remaining_line ~= "false" and remaining_line ~= "true" then
+ 			return "Invalid boolean setting"
+ 		end
+@@ -357,7 +359,7 @@
+ 
+ local function create_change_setting_formspec(dialogdata)
+ 	local setting = settings[selected_setting]
+-	local formspec = "size[10,5.2,true]" ..
++	local formspec = "size[9,5,true]" ..
+ 			"button[5,4.5;2,1;btn_done;" .. fgettext("Save") .. "]" ..
+ 			"button[3,4.5;2,1;btn_cancel;" .. fgettext("Cancel") .. "]" ..
+ 			"tablecolumns[color;text]" ..
+@@ -440,7 +442,7 @@
+ 
+ 	else
+ 		-- TODO: fancy input for float, int, flags, noise_params, v3f
+-		local width = 10
++		local width = 8.5
+ 		local text = get_current_value(setting)
+ 		if dialogdata.error_message then
+ 			formspec = formspec .. "tablecolumns[color;text]" ..

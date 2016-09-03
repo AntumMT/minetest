@@ -1,0 +1,18 @@
+diff -ruN minetest-master/src/terminal_chat_console.cpp minetest-freeminer/src/terminal_chat_console.cpp
+--- minetest-master/src/terminal_chat_console.cpp	2016-09-03 16:15:52.697779000 -0700
++++ minetest-freeminer/src/terminal_chat_console.cpp	2016-09-03 15:44:00.006741000 -0700
+@@ -103,12 +103,13 @@
+ 		CursesInitHelper helper(this);
+ 
+ 		while (!stopRequested()) {
+-
++			EXCEPTION_HANDLER_BEGIN;
+ 			int ch = getch();
+ 			if (stopRequested())
+ 				break;
+ 
+ 			step(ch);
++			EXCEPTION_HANDLER_END;
+ 		}
+ 	}
+ 

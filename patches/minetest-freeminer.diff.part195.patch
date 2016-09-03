@@ -1,0 +1,243 @@
+diff -ruN minetest-master/src/content_cao.cpp minetest-freeminer/src/content_cao.cpp
+--- minetest-master/src/content_cao.cpp	2016-09-03 16:15:52.717779000 -0700
++++ minetest-freeminer/src/content_cao.cpp	2016-09-03 15:44:00.018741000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++content_cao.cpp
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include <ICameraSceneNode.h>
+@@ -228,6 +231,7 @@
+ 		return;
+ 
+ 	m_node->remove();
++	m_node->drop();
+ 	m_node = NULL;
+ }
+ 
+@@ -404,6 +408,7 @@
+ 		return;
+ 
+ 	m_node->remove();
++	m_node->drop();
+ 	m_node = NULL;
+ }
+ 
+@@ -552,6 +557,7 @@
+ 		m_animated_meshnode(NULL),
+ 		m_wield_meshnode(NULL),
+ 		m_spritenode(NULL),
++		m_shadownode(nullptr),
+ 		m_nametag(NULL),
+ 		m_position(v3f(0,10*BS,0)),
+ 		m_velocity(v3f(0,0,0)),
+@@ -612,7 +618,7 @@
+ 
+ void GenericCAO::initialize(const std::string &data)
+ {
+-	infostream<<"GenericCAO: Got init data"<<std::endl;
++	//infostream<<"GenericCAO: Got init data"<<std::endl;
+ 	std::istringstream is(data, std::ios::binary);
+ 	int num_messages = 0;
+ 	// version
+@@ -672,7 +678,7 @@
+ GenericCAO::~GenericCAO()
+ {
+ 	if (m_is_player) {
+-		m_env->removePlayerName(m_name.c_str());
++		m_env->removePlayerName(m_name);
+ 	}
+ 	removeFromScene(true);
+ }
+@@ -779,6 +785,11 @@
+ 		}
+ 	}
+ 
++	if (m_shadownode) {
++		// no drop?!
++		m_shadownode = nullptr;
++	}
++
+ 	if (m_meshnode) {
+ 		m_meshnode->remove();
+ 		m_meshnode->drop();
+@@ -806,6 +817,8 @@
+ void GenericCAO::addToScene(scene::ISceneManager *smgr,
+ 		ITextureSource *tsrc, IrrlichtDevice *irr)
+ {
++	static auto headless_optimize = g_settings->getBool("headless_optimize");
++
+ 	m_smgr = smgr;
+ 	m_irr = irr;
+ 
+@@ -819,8 +832,12 @@
+ 		return;
+ 	}
+ 
++	//video::IVideoDriver* driver = smgr->getVideoDriver();
++
+ 	if (m_prop.visual == "sprite") {
++/*
+ 		infostream<<"GenericCAO::addToScene(): single_sprite"<<std::endl;
++*/
+ 		m_spritenode = smgr->addBillboardSceneNode(
+ 				NULL, v2f(1, 1), v3f(0,0,0), -1);
+ 		m_spritenode->grab();
+@@ -934,14 +951,14 @@
+ 			m_animated_meshnode->setMaterialFlag(video::EMF_FOG_ENABLE, true);
+ 			m_animated_meshnode->setMaterialFlag(video::EMF_BACK_FACE_CULLING, backface_culling);
+ 		}
+-		else
++		else if (!headless_optimize)
+ 			errorstream<<"GenericCAO::addToScene(): Could not load mesh "<<m_prop.mesh<<std::endl;
+ 	}
+ 	else if(m_prop.visual == "wielditem") {
+-		infostream<<"GenericCAO::addToScene(): wielditem"<<std::endl;
+-		infostream<<"textures: "<<m_prop.textures.size()<<std::endl;
++		//infostream<<"GenericCAO::addToScene(): wielditem"<<std::endl;
++		//infostream<<"textures: "<<m_prop.textures.size()<<std::endl;
+ 		if(m_prop.textures.size() >= 1){
+-			infostream<<"textures[0]: "<<m_prop.textures[0]<<std::endl;
++			//infostream<<"textures[0]: "<<m_prop.textures[0]<<std::endl;
+ 			IItemDefManager *idef = m_gamedef->idef();
+ 			ItemStack item(m_prop.textures[0], 1, 0, "", idef);
+ 
+@@ -972,6 +989,24 @@
+ 	updateAnimation();
+ 	updateBonePosition();
+ 	updateAttachments();
++
++#if (IRRLICHT_VERSION_MAJOR >= 1 && IRRLICHT_VERSION_MINOR >= 8) || IRRLICHT_VERSION_MAJOR >= 2
++	const static float shadowinf = 5 * BS;
++	if (g_settings->getBool("shadows")) {
++		if (m_wield_meshnode && m_wield_meshnode->m_meshnode)
++			m_shadownode = m_wield_meshnode->m_meshnode->addShadowVolumeSceneNode(nullptr, 0, true, shadowinf);
++		if(m_animated_meshnode)
++			m_shadownode = m_animated_meshnode->addShadowVolumeSceneNode(nullptr, 0, true, shadowinf);
++		else if(m_meshnode)
++			m_shadownode = m_meshnode->addShadowVolumeSceneNode(nullptr, 0, true, shadowinf);
++		if (m_shadownode) {
++			m_shadownode->setMaterialFlag(video::EMF_FOG_ENABLE, true);
++			m_shadownode->setMaterialFlag(video::EMF_LIGHTING, false);
++			m_shadownode->setMaterialFlag(video::EMF_BILINEAR_FILTER, false);
++		}
++	}
++
++#endif
+ }
+ 
+ void GenericCAO::updateLight(u8 light_at_pos)
+@@ -1189,6 +1224,11 @@
+ 			pos_translator.translate(dtime);
+ 			updateNodePos();
+ 		} else {
++
++		if (m_position_recd && m_velocity.getLength() > 0.01 && (porting::getTimeMs() - m_position_recd)/1000.0 > m_update_interval) {
++			m_velocity *= 0.7;
++		}
++
+ 			m_position += dtime * m_velocity + 0.5 * dtime * dtime * m_acceleration;
+ 			m_velocity += dtime * m_acceleration;
+ 			pos_translator.update(m_position, pos_translator.aim_is_end,
+@@ -1207,7 +1247,7 @@
+ 				INodeDefManager *ndef = m_gamedef->ndef();
+ 				v3s16 p = floatToInt(getPosition() + v3f(0,
+ 						(m_prop.collisionbox.MinEdge.Y-0.5)*BS, 0), BS);
+-				MapNode n = m_env->getMap().getNodeNoEx(p);
++				MapNode n = m_env->getMap().getNodeTry(p);
+ 				SimpleSoundSpec spec = ndef->get(n).sound_footstep;
+ 				m_gamedef->sound()->playSoundAt(spec, false, getPosition());
+ 			}
+@@ -1256,6 +1296,13 @@
+ 		}
+ 		updateNodePos();
+ 	}
++
++	if (m_shadownode && !(rand()%50)) {
++		auto n = m_env->getMap().getNodeTry(floatToInt(getPosition(), BS));
++		if (n.getContent() != CONTENT_IGNORE)
++			m_shadownode->setVisible(n.getLight(LIGHTBANK_DAY, env->getGameDef()->ndef()) >= LIGHT_SUN);
++	}
++
+ }
+ 
+ void GenericCAO::updateTexturePos()
+@@ -1424,7 +1471,7 @@
+ 		{
+ 			scene::IMesh *mesh = m_meshnode->getMesh();
+ 			{
+-				std::string tname = "unknown_object.png";
++				std::string tname = "blank.png";
+ 				if(m_prop.textures.size() >= 1)
+ 					tname = m_prop.textures[0];
+ 				tname += mod;
+@@ -1447,7 +1494,7 @@
+ 				buf->getMaterial().setFlag(video::EMF_ANISOTROPIC_FILTER, use_anisotropic_filter);
+ 			}
+ 			{
+-				std::string tname = "unknown_object.png";
++				std::string tname = "blank.png";
+ 				if(m_prop.textures.size() >= 2)
+ 					tname = m_prop.textures[1];
+ 				else if(m_prop.textures.size() >= 1)
+@@ -1603,20 +1650,22 @@
+ 			readF1000(is);
+ 		bool do_interpolate = readU8(is);
+ 		bool is_end_position = readU8(is);
+-		float update_interval = readF1000(is);
++		m_update_interval = readF1000(is);
+ 
+ 		// Place us a bit higher if we're physical, to not sink into
+ 		// the ground due to sucky collision detection...
+ 		if(m_prop.physical)
+ 			m_position += v3f(0,0.002,0);
+ 
++		m_position_recd = porting::getTimeMs();
++
+ 		if(getParent() != NULL) // Just in case
+ 			return;
+ 
+ 		if(do_interpolate)
+ 		{
+ 			if(!m_prop.physical)
+-				pos_translator.update(m_position, is_end_position, update_interval);
++				pos_translator.update(m_position, is_end_position, m_update_interval);
+ 		} else {
+ 			pos_translator.init(m_position);
+ 		}
+@@ -1780,7 +1829,7 @@
+ bool GenericCAO::directReportPunch(v3f dir, const ItemStack *punchitem,
+ 		float time_from_last_punch)
+ {
+-	assert(punchitem);	// pre-condition
++	if(!punchitem) return true;	// pre-condition
+ 	const ToolCapabilities *toolcap =
+ 			&punchitem->getToolCapabilities(m_gamedef->idef());
+ 	PunchDamageResult result = getPunchDamage(

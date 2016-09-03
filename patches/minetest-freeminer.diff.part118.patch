@@ -1,0 +1,23 @@
+diff -ruN minetest-master/client/shaders/nodes_shader/opengl_fragment.glsl minetest-freeminer/client/shaders/nodes_shader/opengl_fragment.glsl
+--- minetest-master/client/shaders/nodes_shader/opengl_fragment.glsl	2016-09-03 16:15:52.685779000 -0700
++++ minetest-freeminer/client/shaders/nodes_shader/opengl_fragment.glsl	2016-09-03 15:43:59.814740000 -0700
+@@ -5,6 +5,9 @@
+ uniform vec4 skyBgColor;
+ uniform float fogDistance;
+ uniform vec3 eyePosition;
++uniform vec3 sunPosition;
++
++uniform float wieldLight;
+ 
+ varying vec3 vPosition;
+ varying vec3 worldPosition;
+@@ -192,7 +195,8 @@
+ 	color = base.rgb;
+ #endif
+ 
+-	vec4 col = vec4(color.rgb * gl_Color.rgb, 1.0); 
++	float light = max((wieldLight/2.0)/vPosition.z, 0.0);
++	vec4 col = vec4(color.rgb * min(gl_Color.rgb + light, 1.0), 1.0);
+ 	
+ #if MATERIAL_TYPE == TILE_MATERIAL_LIQUID_TRANSPARENT
+ 	float alpha = gl_Color.a;

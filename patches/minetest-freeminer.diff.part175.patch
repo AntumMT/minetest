@@ -1,0 +1,357 @@
+diff -ruN minetest-master/src/client.h minetest-freeminer/src/client.h
+--- minetest-master/src/client.h	2016-09-03 16:15:52.649779000 -0700
++++ minetest-freeminer/src/client.h	2016-09-03 15:43:59.974741000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++client.h
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #ifndef CLIENT_HEADER
+@@ -34,6 +37,11 @@
+ #include "localplayer.h"
+ #include "hud.h"
+ #include "particles.h"
++
++#include "threading/thread_pool.h"
++#include "util/unordered_map_hash.h"
++#include "msgpack_fix.h"
++
+ #include "network/networkpacket.h"
+ 
+ struct MeshMakeData;
+@@ -48,10 +56,13 @@
+ class MtEventManager;
+ struct PointedThing;
+ class Database;
++class Server;
+ class Mapper;
+ struct MinimapMapblock;
++class ChatBackend;
+ class Camera;
+ 
++/*
+ struct QueuedMeshUpdate
+ {
+ 	v3s16 p;
+@@ -61,6 +72,7 @@
+ 	QueuedMeshUpdate();
+ 	~QueuedMeshUpdate();
+ };
++*/
+ 
+ enum LocalClientState {
+ 	LC_Created,
+@@ -78,38 +90,24 @@
+ 
+ 	~MeshUpdateQueue();
+ 
+-	/*
+-		peer_id=0 adds with nobody to send to
+-	*/
+-	void addBlock(v3s16 p, MeshMakeData *data,
+-			bool ack_block_to_server, bool urgent);
++	unsigned int addBlock(v3POS p, std::shared_ptr<MeshMakeData> data, bool urgent);
++	std::shared_ptr<MeshMakeData> pop();
+ 
+-	// Returned pointer must be deleted
+-	// Returns NULL if queue is empty
+-	QueuedMeshUpdate * pop();
+-
+-	u32 size()
+-	{
+-		MutexAutoLock lock(m_mutex);
+-		return m_queue.size();
+-	}
++	concurrent_unordered_map<v3s16, bool, v3POSHash, v3POSEqual> m_process;
+ 
+ private:
+-	std::vector<QueuedMeshUpdate*> m_queue;
+-	std::set<v3s16> m_urgents;
+-	Mutex m_mutex;
++	concurrent_map<unsigned int, unordered_map_v3POS<std::shared_ptr<MeshMakeData>>> m_queue;
++	unordered_map_v3POS<unsigned int> m_ranges;
+ };
+ 
+ struct MeshUpdateResult
+ {
+ 	v3s16 p;
+-	MapBlockMesh *mesh;
+-	bool ack_block_to_server;
++	MapBlock::mesh_type mesh;
+ 
+-	MeshUpdateResult():
+-		p(-1338,-1338,-1338),
+-		mesh(NULL),
+-		ack_block_to_server(false)
++	MeshUpdateResult(v3POS & p_, MapBlock::mesh_type mesh_):
++		p(p_),
++		mesh(mesh_)
+ 	{
+ 	}
+ };
+@@ -118,7 +116,7 @@
+ {
+ private:
+ 	MeshUpdateQueue m_queue_in;
+-
++ 
+ protected:
+ 	virtual void doUpdate();
+ 
+@@ -126,11 +124,13 @@
+ 
+ 	MeshUpdateThread() : UpdateThread("Mesh") {}
+ 
+-	void enqueueUpdate(v3s16 p, MeshMakeData *data,
+-			bool ack_block_to_server, bool urgent);
++	void enqueueUpdate(v3s16 p, std::shared_ptr<MeshMakeData> data,
++			bool urgent);
++
+ 	MutexedQueue<MeshUpdateResult> m_queue_out;
+ 
+ 	v3s16 m_camera_offset;
++	int id;
+ };
+ 
+ enum ClientEventType
+@@ -287,6 +287,7 @@
+ 				i = m_packets.begin();
+ 				i != m_packets.end(); ++i)
+ 		{
++			if (i->second)
+ 			o<<"cmd "<<i->first
+ 					<<" count "<<i->second
+ 					<<std::endl;
+@@ -309,6 +310,7 @@
+ 			IrrlichtDevice *device,
+ 			const char *playername,
+ 			std::string password,
++			bool is_simple_singleplayer_game,
+ 			MapDrawControl &control,
+ 			IWritableTextureSource *tsrc,
+ 			IWritableShaderSource *shsrc,
+@@ -326,9 +328,6 @@
+ 	 */
+ 	void Stop();
+ 
+-
+-	bool isShutdown();
+-
+ 	/*
+ 		The name of the local player should already be set when
+ 		calling this, as it is sent in the initialization.
+@@ -371,7 +370,7 @@
+ 	void handleCommand_HP(NetworkPacket* pkt);
+ 	void handleCommand_Breath(NetworkPacket* pkt);
+ 	void handleCommand_MovePlayer(NetworkPacket* pkt);
+-	void handleCommand_PlayerItem(NetworkPacket* pkt);
++	void handleCommand_PunchPlayer(NetworkPacket* pkt);
+ 	void handleCommand_DeathScreen(NetworkPacket* pkt);
+ 	void handleCommand_AnnounceMedia(NetworkPacket* pkt);
+ 	void handleCommand_Media(NetworkPacket* pkt);
+@@ -404,6 +403,10 @@
+ 	// Returns true if something was received
+ 	bool AsyncProcessPacket();
+ 	bool AsyncProcessData();
++/*
++	void Send(u16 channelnum, SharedBuffer<u8> data, bool reliable);
++*/
++	void Send(u16 channelnum, const msgpack::sbuffer &data, bool reliable);
+ 	void Send(NetworkPacket* pkt);
+ 
+ 	void interact(u8 action, const PointedThing& pointed);
+@@ -413,7 +416,7 @@
+ 	void sendInventoryFields(const std::string &formname,
+ 		const StringMap &fields);
+ 	void sendInventoryAction(InventoryAction *a);
+-	void sendChatMessage(const std::wstring &message);
++	void sendChatMessage(const std::string &message);
+ 	void sendChangePassword(const std::string &oldpassword,
+ 		const std::string &newpassword);
+ 	void sendDamage(u8 damage);
+@@ -425,14 +428,16 @@
+ 	{ return m_env; }
+ 
+ 	// Causes urgent mesh updates (unlike Map::add/removeNodeWithEvent)
+-	void removeNode(v3s16 p);
+-	void addNode(v3s16 p, MapNode n, bool remove_metadata = true);
++	void removeNode(v3s16 p, int fast = 0);
++	void addNode(v3s16 p, MapNode n, bool remove_metadata = true, int fast = 0);
+ 
+ 	void setPlayerControl(PlayerControl &control);
+ 
+ 	void selectPlayerItem(u16 item);
+ 	u16 getPlayerItem() const
+ 	{ return m_playeritem; }
++	u16 getPreviousPlayerItem() const
++	{ return m_previous_playeritem; }
+ 
+ 	// Returns true if the inventory of the local player has been
+ 	// updated from the server. If it is true, it is set to false.
+@@ -465,15 +470,17 @@
+ 	bool checkPrivilege(const std::string &priv)
+ 	{ return (m_privileges.count(priv) != 0); }
+ 
+-	bool getChatMessage(std::wstring &message);
+-	void typeChatMessage(const std::wstring& message);
++	bool getChatMessage(std::string &message);
++	void typeChatMessage(const std::string& message);
+ 
+ 	u64 getMapSeed(){ return m_map_seed; }
+ 
+-	void addUpdateMeshTask(v3s16 blockpos, bool ack_to_server=false, bool urgent=false);
++	void addUpdateMeshTask(v3s16 blockpos, bool urgent=false, int step = 0);
+ 	// Including blocks at appropriate edges
+-	void addUpdateMeshTaskWithEdge(v3s16 blockpos, bool ack_to_server=false, bool urgent=false);
+-	void addUpdateMeshTaskForNode(v3s16 nodepos, bool ack_to_server=false, bool urgent=false);
++	void addUpdateMeshTaskWithEdge(v3POS blockpos, bool urgent = false);
++	void addUpdateMeshTaskForNode(v3s16 nodepos, bool urgent=false);
++
++	void updateMeshTimestampWithEdge(v3s16 blockpos);
+ 
+ 	void updateCameraOffset(v3s16 camera_offset)
+ 	{ m_mesh_update_thread.m_camera_offset = camera_offset; }
+@@ -547,20 +554,22 @@
+ 
+ 	LocalClientState getState() { return m_state; }
+ 
+-	void makeScreenshot(IrrlichtDevice *device);
++	void makeScreenshot(const std::string & name = "screenshot_", IrrlichtDevice *device = nullptr);
++	
++	ChatBackend *chat_backend;
+ 
+ private:
+ 
+ 	// Virtual methods from con::PeerHandler
+-	void peerAdded(con::Peer *peer);
+-	void deletingPeer(con::Peer *peer, bool timeout);
++	void peerAdded(u16 peer_id);
++	void deletingPeer(u16 peer_id, bool timeout);
+ 
+ 	void initLocalMapSaving(const Address &address,
+ 			const std::string &hostname,
+ 			bool is_local_server);
+ 
+ 	void ReceiveAll();
+-	void Receive();
++	bool Receive();
+ 
+ 	void sendPlayerPos();
+ 	// Send the item number 'item' as player item to the server
+@@ -570,7 +579,7 @@
+ 	// helper method shared with clientpackethandler
+ 	static AuthMechanism choseAuthMech(const u32 mechs);
+ 
+-	void sendLegacyInit(const char* playerName, const char* playerPassword);
++	void sendLegacyInit(const std::string &playerName, const std::string &playerPassword);
+ 	void sendInit(const std::string &playerName);
+ 	void startAuth(AuthMechanism chosen_auth_mechanism);
+ 	void sendDeletedBlocks(std::vector<v3s16> &blocks);
+@@ -595,11 +604,13 @@
+ 	ISoundManager *m_sound;
+ 	MtEventManager *m_event;
+ 
+-
+ 	MeshUpdateThread m_mesh_update_thread;
++private:
+ 	ClientEnvironment m_env;
+ 	ParticleManager m_particle_manager;
++public:
+ 	con::Connection m_con;
++private:
+ 	IrrlichtDevice *m_device;
+ 	Camera *m_camera;
+ 	Mapper *m_mapper;
+@@ -615,18 +626,19 @@
+ 	u8 m_proto_ver;
+ 
+ 	u16 m_playeritem;
++	u16 m_previous_playeritem;
+ 	bool m_inventory_updated;
+ 	Inventory *m_inventory_from_server;
+ 	float m_inventory_from_server_age;
+ 	PacketCounter m_packetcounter;
+ 	// Block mesh animation parameters
+ 	float m_animation_time;
+-	int m_crack_level;
++	std::atomic_int m_crack_level;
+ 	v3s16 m_crack_pos;
+ 	// 0 <= m_daynight_i < DAYNIGHT_CACHE_COUNT
+ 	//s32 m_daynight_i;
+ 	//u32 m_daynight_ratio;
+-	std::queue<std::wstring> m_chat_queue;
++	Queue<std::string> m_chat_queue; // todo: convert to std::queue
+ 
+ 	// The authentication methods we can use to enter sudo mode (=change password)
+ 	u32 m_sudo_auth_methods;
+@@ -637,17 +649,18 @@
+ 	// Auth data
+ 	std::string m_playername;
+ 	std::string m_password;
++	bool is_simple_singleplayer_game;
+ 	// If set, this will be sent (and cleared) upon a TOCLIENT_ACCEPT_SUDO_MODE
+ 	std::string m_new_password;
+ 	// Usable by auth mechanisms.
+ 	AuthMechanism m_chosen_auth_mech;
+ 	void * m_auth_data;
+ 
+-
+ 	bool m_access_denied;
+ 	bool m_access_denied_reconnect;
+ 	std::string m_access_denied_reason;
+-	std::queue<ClientEvent> m_client_event_queue;
++	Queue<ClientEvent> m_client_event_queue;
++	//std::queue<ClientEvent> m_client_event_queue;
+ 	bool m_itemdef_received;
+ 	bool m_nodedef_received;
+ 	ClientMediaDownloader *m_media_downloader;
+@@ -675,6 +688,14 @@
+ 	// Detached inventories
+ 	// key = name
+ 	std::map<std::string, Inventory*> m_detached_inventories;
++	double m_uptime;
++	bool m_simple_singleplayer_mode;
++	float m_timelapse_timer;
++public:
++	bool use_weather = false;
++	unsigned int overload = 0;
++	void sendDrawControl();
++private:
+ 
+ 	// Storage for mesh data for creating multiple instances of the same mesh
+ 	StringMap m_mesh_data;
+@@ -686,6 +707,7 @@
+ 	Database *m_localdb;
+ 	IntervalLimiter m_localdb_save_interval;
+ 	u16 m_cache_save_interval;
++	Server *m_localserver;
+ 
+ 	// TODO: Add callback to update these when g_settings changes
+ 	bool m_cache_smooth_lighting;

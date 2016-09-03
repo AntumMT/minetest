@@ -1,0 +1,62 @@
+diff -ruN minetest-master/src/irrlicht_changes/static_text.cpp minetest-freeminer/src/irrlicht_changes/static_text.cpp
+--- minetest-master/src/irrlicht_changes/static_text.cpp	2016-09-03 16:15:52.525778000 -0700
++++ minetest-freeminer/src/irrlicht_changes/static_text.cpp	2016-09-03 15:43:59.890740000 -0700
+@@ -145,13 +145,13 @@
+ 							font->getDimension(BrokenText[i].c_str()).Width;
+ 					}
+ 
+-					//std::vector<irr::video::SColor> colors;
++					std::vector<irr::video::SColor> colors;
+ 					//std::wstring str;
+ 					EnrichedString str = BrokenText[i];
+ 
+-					//str = colorizeText(BrokenText[i].c_str(), colors, previous_color);
+-					//if (!colors.empty())
+-					//	previous_color = colors[colors.size() - 1];
++					str = colorizeText(BrokenText[i].c_str(), colors, previous_color);
++					if (!colors.empty())
++						previous_color = colors[colors.size() - 1];
+ 
+ 					irr::gui::CGUITTFont *tmp = static_cast<irr::gui::CGUITTFont*>(font);
+ 					tmp->draw(str, r,
+@@ -237,7 +237,9 @@
+ //! Checks if background drawing is enabled
+ bool StaticText::isDrawBackgroundEnabled() const
+ {
++#if defined(_IRR_IMPLEMENT_MANAGED_MARSHALLING_BUGFIX)
+ 	_IRR_IMPLEMENT_MANAGED_MARSHALLING_BUGFIX;
++#endif
+ 	return Background;
+ }
+ 
+@@ -252,7 +254,9 @@
+ //! Checks if border drawing is enabled
+ bool StaticText::isDrawBorderEnabled() const
+ {
++#if defined(_IRR_IMPLEMENT_MANAGED_MARSHALLING_BUGFIX)
+ 	_IRR_IMPLEMENT_MANAGED_MARSHALLING_BUGFIX;
++#endif
+ 	return Border;
+ }
+ 
+@@ -296,7 +300,10 @@
+ 
+ bool StaticText::isOverrideColorEnabled() const
+ {
++
++#if defined(_IRR_IMPLEMENT_MANAGED_MARSHALLING_BUGFIX)
+ 	_IRR_IMPLEMENT_MANAGED_MARSHALLING_BUGFIX;
++#endif
+ 	return OverrideColorEnabled;
+ }
+ 
+@@ -312,7 +319,9 @@
+ 
+ bool StaticText::isWordWrapEnabled() const
+ {
++#if defined(_IRR_IMPLEMENT_MANAGED_MARSHALLING_BUGFIX)
+ 	_IRR_IMPLEMENT_MANAGED_MARSHALLING_BUGFIX;
++#endif
+ 	return WordWrap;
+ }
+ 

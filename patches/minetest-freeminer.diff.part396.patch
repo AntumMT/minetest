@@ -1,0 +1,235 @@
+diff -ruN minetest-master/src/network/serverpackethandler.cpp minetest-freeminer/src/network/serverpackethandler.cpp
+--- minetest-master/src/network/serverpackethandler.cpp	2016-09-03 16:15:52.537778000 -0700
++++ minetest-freeminer/src/network/serverpackethandler.cpp	2016-09-03 15:43:59.890740000 -0700
+@@ -17,6 +17,13 @@
+ 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+ 
++#include "config.h"
++
++#if !MINETEST_PROTO
++#include "network/fm_serverpackethandler.cpp"
++
++#else //TODO
++
+ #include "server.h"
+ #include "log.h"
+ 
+@@ -173,7 +180,7 @@
+ 		return;
+ 	}
+ 
+-	if (string_allowed(playerName, PLAYERNAME_ALLOWED_CHARS) == false) {
++	if (!g_settings->getBool("enable_any_name") && string_allowed(playerName, PLAYERNAME_ALLOWED_CHARS) == false) {
+ 		actionstream << "Server: Player with an invalid name "
+ 				<< "tried to connect from " << addr_s << std::endl;
+ 		DenyAccess(pkt->getPeerId(), SERVER_ACCESSDENIED_WRONG_CHARS_IN_NAME);
+@@ -468,7 +475,7 @@
+ 		return;
+ 	}
+ 
+-	if (string_allowed(playername, PLAYERNAME_ALLOWED_CHARS) == false) {
++	if (!g_settings->getBool("enable_any_name") && string_allowed(playername, PLAYERNAME_ALLOWED_CHARS) == false) {
+ 		actionstream << "Server: Player with an invalid name "
+ 				<< "tried to connect from " << addr_s << std::endl;
+ 		DenyAccess_Legacy(pkt->getPeerId(), L"Name contains unallowed characters");
+@@ -742,10 +749,13 @@
+ 
+ 	m_clients.event(peer_id, CSE_SetClientReady);
+ 	m_script->on_joinplayer(playersao);
++
++	stat.add("join", playersao->getPlayer()->getName());
+ }
+ 
+ void Server::handleCommand_GotBlocks(NetworkPacket* pkt)
+ {
++#if NOTUSED
+ 	if (pkt->getSize() < 1)
+ 		return;
+ 
+@@ -772,6 +782,7 @@
+ 		*pkt >> p;
+ 		client->GotBlock(p);
+ 	}
++#endif
+ }
+ 
+ void Server::handleCommand_PlayerPos(NetworkPacket* pkt)
+@@ -830,6 +841,10 @@
+ 	player->setPitch(pitch);
+ 	player->setYaw(yaw);
+ 	player->keyPressed = keyPressed;
++
++	{
++	std::lock_guard<Mutex> lock(player->control_mutex);
++
+ 	player->control.up = (keyPressed & 1);
+ 	player->control.down = (keyPressed & 2);
+ 	player->control.left = (keyPressed & 4);
+@@ -839,12 +854,32 @@
+ 	player->control.sneak = (keyPressed & 64);
+ 	player->control.LMB = (keyPressed & 128);
+ 	player->control.RMB = (keyPressed & 256);
++	}
+ 
++	auto old_pos = playersao->m_last_good_position;
+ 	if (playersao->checkMovementCheat()) {
+ 		// Call callbacks
+ 		m_script->on_cheat(playersao, "moved_too_fast");
+ 		SendMovePlayer(pkt->getPeerId());
+ 	}
++// copypaste from fm_serverpackethandler.cpp
++		else if (playersao->m_ms_from_last_respawn > 3000) {
++			auto dist = (old_pos/BS).getDistanceFrom(playersao->m_last_good_position/BS);
++			if (dist)
++				stat.add("move", playersao->getPlayer()->getName(), dist);
++		}
++
++		if (playersao->m_ms_from_last_respawn > 2000) {
++			auto obj = playersao; // copypasted from server step:
++			auto uptime = m_uptime.get();
++			if (!obj->m_uptime_last)  // not very good place, but minimum modifications
++				obj->m_uptime_last = uptime - 0.1;
++			if (uptime - obj->m_uptime_last > 0.5) {
++				obj->step(uptime - obj->m_uptime_last, true); //todo: maybe limit count per time
++				obj->m_uptime_last = uptime;
++			}
++		}
++//copypaste end
+ }
+ 
+ void Server::handleCommand_DeletedBlocks(NetworkPacket* pkt)
+@@ -873,7 +908,7 @@
+ 	for (u16 i = 0; i < count; i++) {
+ 		v3s16 p;
+ 		*pkt >> p;
+-		client->SetBlockNotSent(p);
++		client->SetBlockDeleted(p);
+ 	}
+ }
+ 
+@@ -1001,6 +1036,7 @@
+ 			delete a;
+ 			return;
+ 		}
++		stat.add("drop", player->getName());
+ 	}
+ 	/*
+ 		Handle restrictions and special cases of the craft action
+@@ -1023,6 +1059,7 @@
+ 			delete a;
+ 			return;
+ 		}
++		stat.add("craft", player->getName());
+ 	}
+ 
+ 	// Do the action
+@@ -1103,6 +1140,8 @@
+ 
+ 		playersao->setHP(playersao->getHP() - damage);
+ 		SendPlayerHPOrDie(playersao);
++
++		stat.add("damage", player->getName(), damage);
+ 	}
+ }
+ 
+@@ -1296,6 +1335,11 @@
+ 	PointedThing pointed;
+ 	pointed.deSerialize(tmp_is);
+ 
++	if (overload) {
++		if (pointed.type == POINTEDTHING_NOTHING || action == 1) return;
++		//errorstream<<"overload pointed peer_id=" << peer_id << " action=" << (int)action  << " pointed.type="<<pointed.type<< "\n";
++	}
++
+ 	verbosestream << "TOSERVER_INTERACT: action=" << (int)action << ", item="
+ 			<< item_i << ", pointed=" << pointed.dump() << std::endl;
+ 
+@@ -1377,6 +1421,7 @@
+ 			// Call callbacks
+ 			m_script->on_cheat(playersao, "interacted_too_far");
+ 			// Do nothing else
++			stat.add("interact_denied", player->getName());
+ 			return;
+ 		}
+ 	}
+@@ -1470,6 +1515,8 @@
+ 			// If the puncher is a player and its HP changed
+ 			if (dst_origin_hp != playersao->getHP())
+ 				SendPlayerHPOrDie(playersao);
++
++			stat.add("punch", player->getName());
+ 		}
+ 
+ 	} // action == 0
+@@ -1568,8 +1615,12 @@
+ 
+ 			/* Actually dig node */
+ 
+-			if (is_valid_dig && n.getContent() != CONTENT_IGNORE)
++			if (is_valid_dig && n.getContent() != CONTENT_IGNORE) {
+ 				m_script->node_on_dig(p_under, n, playersao);
++				stat.add("dig", player->getName());
++				stat.add("dig_"+ m_nodedef->get(n).name , player->getName());
++					m_env->nodeUpdate(p_under, 5, 0);
++			}
+ 
+ 			v3s16 blockpos = getNodeBlockPos(floatToInt(pointed_pos_under, BS));
+ 			RemoteClient *client = getClient(pkt->getPeerId());
+@@ -1608,7 +1659,11 @@
+ 
+ 			// Do stuff
+ 			pointed_object->rightClick(playersao);
++
++			m_env->nodeUpdate(p_under, 5, 0);
+ 		}
++
++
+ 		else if (m_script->item_OnPlace(
+ 				item, playersao, pointed)) {
+ 			// Placement was handled in lua
+@@ -1617,6 +1672,8 @@
+ 			if (playersao->setWieldedItem(item)) {
+ 				SendInventory(playersao);
+ 			}
++
++			stat.add("place", player->getName());
+ 		}
+ 
+ 		// If item has node placement prediction, always send the
+@@ -1653,6 +1710,9 @@
+ 			if (playersao->setWieldedItem(item)) {
+ 				SendInventory(playersao);
+ 			}
++
++			stat.add("use", player->getName());
++			stat.add("use_" + item.name, player->getName());
+ 		}
+ 
+ 	} // action == 4
+@@ -1739,6 +1799,9 @@
+ 		return;
+ 	}
+ 
++	if (!m_enable_rollback_recording) {
++		m_script->node_on_receive_fields(p, formname, fields, playersao);
++	} else {
+ 	// If something goes wrong, this player is to blame
+ 	RollbackScopeActor rollback_scope(m_rollback,
+ 			std::string("player:")+player->getName());
+@@ -1755,6 +1818,7 @@
+ 		action.setSetNode(p, rn_old, rn_new);
+ 		rollback()->reportAction(action);
+ 	}
++	}
+ }
+ 
+ void Server::handleCommand_InventoryFields(NetworkPacket* pkt)
+@@ -2045,3 +2109,7 @@
+ 
+ 	acceptAuth(pkt->getPeerId(), wantSudo);
+ }
++
++void Server::handleCommand_Drawcontrol(NetworkPacket* pkt) { }
++
++#endif

@@ -1,0 +1,64 @@
+diff -ruN minetest-master/src/script/cpp_api/s_internal.h minetest-freeminer/src/script/cpp_api/s_internal.h
+--- minetest-master/src/script/cpp_api/s_internal.h	2016-09-03 16:15:52.437778000 -0700
++++ minetest-freeminer/src/script/cpp_api/s_internal.h	2016-09-03 15:43:59.466738000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++script/cpp_api/s_internal.h
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ /******************************************************************************/
+@@ -29,6 +32,13 @@
+ 
+ #include "common/c_internal.h"
+ #include "cpp_api/s_base.h"
++#include "config.h"
++
++#if ENABLE_THREADS
++#define SCRIPTAPI_LOCK auto _script_lock = std::unique_lock<std::recursive_mutex> (this->m_luastackmutex)
++#else
++#define SCRIPTAPI_LOCK
++#endif
+ 
+ #ifdef SCRIPTAPI_LOCK_DEBUG
+ #include "debug.h" // assert()
+@@ -74,12 +84,12 @@
+ 	#define SCRIPTAPI_LOCK_CHECK while(0)
+ #endif
+ 
++
+ #define SCRIPTAPI_PRECHECKHEADER                                               \
+ 		RecursiveMutexAutoLock scriptlock(this->m_luastackmutex);              \
+ 		SCRIPTAPI_LOCK_CHECK;                                                  \
+ 		realityCheck();                                                        \
+ 		lua_State *L = getStack();                                             \
+-		assert(lua_checkstack(L, 20));                                         \
+ 		StackUnroller stack_unroller(L);
+ 
+ #endif /* S_INTERNAL_H_ */

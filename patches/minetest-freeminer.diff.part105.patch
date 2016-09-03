@@ -1,0 +1,34 @@
+diff -ruN minetest-master/builtin/mainmenu/generate_from_settingtypes.lua minetest-freeminer/builtin/mainmenu/generate_from_settingtypes.lua
+--- minetest-master/builtin/mainmenu/generate_from_settingtypes.lua	2016-09-03 16:15:52.445778000 -0700
++++ minetest-freeminer/builtin/mainmenu/generate_from_settingtypes.lua	2016-09-03 15:43:59.846740000 -0700
+@@ -6,16 +6,16 @@
+ local rep = string.rep
+ 
+ local minetest_example_header = [[
+-#    This file contains a list of all available settings and their default value for minetest.conf
++#    This file contains a list of all available settings and their default value for freeminer.conf
+ 
+ #    By default, all the settings are commented and not functional.
+ #    Uncomment settings by removing the preceding #.
+ 
+-#    minetest.conf is read by default from:
+-#    ../minetest.conf
+-#    ../../minetest.conf
++#    freeminer.conf is read by default from:
++#    ../freeminer.conf
++#    ../../freeminer.conf
+ #    Any other path can be chosen by passing the path as a parameter
+-#    to the program, eg. "minetest.exe --config ../minetest.conf.example".
++#    to the program, eg. "freeminer.exe --config ../freeminer.conf.example".
+ 
+ #    Further documentation:
+ #    http://wiki.minetest.net/
+@@ -89,7 +89,7 @@
+ 	return concat(result, "\n")
+ end
+ 
+-local file = assert(io.open("minetest.conf.example", "w"))
++local file = assert(io.open("freeminer.conf.example", "w"))
+ file:write(create_minetest_conf_example())
+ file:close()
+ 

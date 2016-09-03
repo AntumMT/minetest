@@ -1,0 +1,53 @@
+diff -ruN minetest-master/src/touchscreengui.h minetest-freeminer/src/touchscreengui.h
+--- minetest-master/src/touchscreengui.h	2016-09-03 16:15:52.701779000 -0700
++++ minetest-freeminer/src/touchscreengui.h	2016-09-03 15:43:59.826740000 -0700
+@@ -19,6 +19,10 @@
+ #ifndef TOUCHSCREENGUI_HEADER
+ #define TOUCHSCREENGUI_HEADER
+ 
++#include "fm_touchscreengui.h"
++#if 0
++
++
+ #include <IGUIEnvironment.h>
+ #include <IGUIButton.h>
+ #include <IEventReceiver.h>
+@@ -68,14 +72,14 @@
+ #define SETTINGS_BAR_Y_OFFSET 6.5
+ #define RARE_CONTROLS_BAR_Y_OFFSET 4
+ 
+-extern const char** touchgui_button_imagenames;
++extern const char* touchgui_button_imagenames[];
+ 
+ struct button_info {
+ 	float            repeatcounter;
+ 	float            repeatdelay;
+ 	irr::EKEY_CODE   keycode;
+ 	std::vector<int> ids;
+-	IGUIButton*      guibutton;
++	IGUIButton*      guibutton = nullptr;
+ 	bool             immediate_release;
+ };
+ 
+@@ -89,6 +93,7 @@
+ 			int button_id, v2s32 UpperLeft, v2s32 LowerRight,
+ 			autohide_button_bar_dir dir, float timeout);
+ 
++	void clear();
+ 	~AutoHideButtonBar();
+ 
+ 	/* add button to be shown */
+@@ -179,7 +184,7 @@
+ 
+ 	int                     m_move_id;
+ 	bool                    m_move_has_really_moved;
+-	s32                     m_move_downtime;
++	u32                     m_move_downtime;
+ 	bool                    m_move_sent_as_mouse_event;
+ 	v2s32                   m_move_downlocation;
+ 
+@@ -250,3 +255,4 @@
+ };
+ extern TouchScreenGUI *g_touchscreengui;
+ #endif
++#endif

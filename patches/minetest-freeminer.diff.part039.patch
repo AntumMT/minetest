@@ -1,0 +1,5 @@
+diff -ruN minetest-master/build/debian/freeminer.manpages minetest-freeminer/build/debian/freeminer.manpages
+--- minetest-master/build/debian/freeminer.manpages	1969-12-31 16:00:00.000000000 -0800
++++ minetest-freeminer/build/debian/freeminer.manpages	2016-09-03 15:44:00.002741000 -0700
+@@ -0,0 +1 @@
++doc/freeminer.6

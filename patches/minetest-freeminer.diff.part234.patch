@@ -1,0 +1,87 @@
+diff -ruN minetest-master/src/dungeongen.cpp minetest-freeminer/src/dungeongen.cpp
+--- minetest-master/src/dungeongen.cpp	2016-09-03 16:15:52.633779000 -0700
++++ minetest-freeminer/src/dungeongen.cpp	2016-09-03 15:43:59.958741000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++dungeongen.cpp
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "dungeongen.h"
+@@ -141,6 +144,8 @@
+ 	v3s16 roomsize;
+ 	v3s16 roomplace;
+ 
++	float far_multi = farscale(5, vm->m_area.MinEdge.X, vm->m_area.MinEdge.Y, vm->m_area.MinEdge.Z);
++
+ 	/*
+ 		Find place for first room
+ 	*/
+@@ -148,13 +153,13 @@
+ 	for (u32 i = 0; i < 100 && !fits; i++) {
+ 		bool is_large_room = ((random.next() & 3) == 1);
+ 		if (is_large_room) {
+-			roomsize.Z = random.range(8, 16);
+-			roomsize.Y = random.range(8, 16);
+-			roomsize.X = random.range(8, 16);
++			roomsize.Z = random.range(8, 16 * far_multi);
++			roomsize.Y = random.range(8, 16 * far_multi);
++			roomsize.X = random.range(8, 16 * far_multi);
+ 		} else {
+-			roomsize.Z = random.range(4, 8);
+-			roomsize.Y = random.range(4, 6);
+-			roomsize.X = random.range(4, 8);
++			roomsize.Z = random.range(4, 8 * far_multi);
++			roomsize.Y = random.range(4, 6 * far_multi);
++			roomsize.X = random.range(4, 8 * far_multi);
+ 		}
+ 		roomsize += dp.roomsize;
+ 
+@@ -193,7 +198,7 @@
+ 	*/
+ 	v3s16 last_room_center = roomplace + v3s16(roomsize.X / 2, 1, roomsize.Z / 2);
+ 
+-	u32 room_count = random.range(dp.rooms_min, dp.rooms_max);
++	u32 room_count = random.range(dp.rooms_min, random.range(dp.rooms_max, dp.rooms_max * far_multi));
+ 	for (u32 i = 0; i < room_count; i++) {
+ 		// Make a room to the determined place
+ 		makeRoom(roomsize, roomplace);
+@@ -246,9 +251,9 @@
+ 		makeCorridor(doorplace, doordir, corridor_end, corridor_end_dir);
+ 
+ 		// Find a place for a random sized room
+-		roomsize.Z = random.range(4, 8);
+-		roomsize.Y = random.range(4, 6);
+-		roomsize.X = random.range(4, 8);
++		roomsize.Z = random.range(4, 8 * far_multi);
++		roomsize.Y = random.range(4, 6 * far_multi);
++		roomsize.X = random.range(4, 8 * far_multi);
+ 		roomsize += dp.roomsize;
+ 
+ 		m_pos = corridor_end;

@@ -1,0 +1,96 @@
+diff -ruN minetest-master/src/guiEngine.cpp minetest-freeminer/src/guiEngine.cpp
+--- minetest-master/src/guiEngine.cpp	2016-09-03 16:15:52.617779000 -0700
++++ minetest-freeminer/src/guiEngine.cpp	2016-09-03 15:43:59.946741000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++guiEngine.cpp
+ Copyright (C) 2013 sapier
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "guiEngine.h"
+@@ -28,6 +31,7 @@
+ #include "version.h"
+ #include "porting.h"
+ #include "filesys.h"
++//#include <fstream>
+ #include "settings.h"
+ #include "guiMainMenu.h"
+ #include "sound.h"
+@@ -44,6 +48,7 @@
+ #include <GLES/gl.h>
+ #endif
+ 
++#include <thread>
+ 
+ /******************************************************************************/
+ /** TextDestGuiEngine                                                         */
+@@ -94,6 +99,7 @@
+ 	m_to_delete.insert(name);
+ 
+ #ifdef __ANDROID__
++	porting::irr_device_wait_egl();
+ 	video::IImage *image = m_driver->createImageFromFile(name.c_str());
+ 	if (image) {
+ 		image = Align2Npot2(image, m_driver);
+@@ -282,8 +288,8 @@
+ 		else
+ 			drawBackground(driver);
+ 
+-		drawHeader(driver);
+-		drawFooter(driver);
++		//drawHeader(driver);
++		//drawFooter(driver);
+ 
+ 		m_device->getGUIEnvironment()->drawAll();
+ 
+@@ -314,6 +320,7 @@
+ 	}
+ 
+ 	infostream<<"GUIEngine: Deinitializing scripting"<<std::endl;
++
+ 	delete m_script;
+ 
+ 	m_irr_toplefttext->setText(L"");
+@@ -328,6 +335,7 @@
+ 
+ 	if (m_cloud.clouds)
+ 		m_cloud.clouds->drop();
++
+ }
+ 
+ /******************************************************************************/
+@@ -364,7 +372,7 @@
+ /******************************************************************************/
+ void GUIEngine::cloudPostProcess()
+ {
+-	float fps_max = g_settings->getFloat("pause_fps_max");
++	static const float fps_max = g_settings->getFloat("pause_fps_max");
+ 	// Time of frame without fps limit
+ 	u32 busytime_u32;
+ 

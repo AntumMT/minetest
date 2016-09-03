@@ -1,0 +1,299 @@
+diff -ruN minetest-master/src/settings.cpp minetest-freeminer/src/settings.cpp
+--- minetest-master/src/settings.cpp	2016-09-03 16:15:52.549779000 -0700
++++ minetest-freeminer/src/settings.cpp	2016-09-03 15:43:59.646739000 -0700
+@@ -37,12 +37,16 @@
+ Settings *g_settings = &main_settings;
+ std::string g_settings_path;
+ 
++Json::Reader json_reader;
++Json::StyledWriter json_writer;
++
++
+ Settings::~Settings()
+ {
+ 	clear();
+ }
+ 
+-
++/*
+ Settings & Settings::operator += (const Settings &other)
+ {
+ 	update(other);
+@@ -64,7 +68,7 @@
+ 
+ 	return *this;
+ }
+-
++*/
+ 
+ bool Settings::checkNameValid(const std::string &name)
+ {
+@@ -143,7 +147,7 @@
+ }
+ 
+ 
+-bool Settings::readConfigFile(const char *filename)
++bool Settings::readConfigFile(const std::string &filename)
+ {
+ 	std::ifstream is(filename);
+ 	if (!is.good())
+@@ -296,8 +300,13 @@
+ }
+ 
+ 
+-bool Settings::updateConfigFile(const char *filename)
++bool Settings::updateConfigFile(const std::string &filename)
+ {
++	if (filename.find(".json") != std::string::npos) {
++		writeJsonFile(filename);
++		return true;
++	}
++
+ 	MutexAutoLock lock(m_mutex);
+ 
+ 	std::ifstream is(filename);
+@@ -309,7 +318,7 @@
+ 	if (!was_modified)
+ 		return true;
+ 
+-	if (!fs::safeWriteToFile(filename, os.str())) {
++	if (!fs::safeWriteToFile(filename.c_str(), os.str())) {
+ 		errorstream << "Error writing configuration file: \""
+ 			<< filename << "\"" << std::endl;
+ 		return false;
+@@ -334,9 +343,12 @@
+ 				nonopt_index++;
+ 				continue;
+ 			}
++			continue;
++/*
+ 			errorstream << "Invalid command-line parameter \""
+ 					<< arg_name << "\": --<option> expected." << std::endl;
+ 			return false;
++*/
+ 		}
+ 
+ 		std::string name = arg_name.substr(2);
+@@ -501,7 +513,7 @@
+ }
+ 
+ 
+-bool Settings::getNoiseParams(const std::string &name, NoiseParams &np) const
++bool Settings::getNoiseParams(const std::string &name, NoiseParams &np)
+ {
+ 	return getNoiseParamsFromGroup(name, np) || getNoiseParamsFromValue(name, np);
+ }
+@@ -532,17 +544,31 @@
+ 	if (optional_params != "")
+ 		np.lacunarity = stof(optional_params);
+ 
++	warningstream << " Noise params from string [" << name << "] deprecated. far* values ignored." << std::endl;
++
+ 	return true;
+ }
+ 
+ 
+ bool Settings::getNoiseParamsFromGroup(const std::string &name,
+-	NoiseParams &np) const
++	NoiseParams &np)
+ {
+ 	Settings *group = NULL;
++	bool created = false;
+ 
+ 	if (!getGroupNoEx(name, group))
+-		return false;
++	{
++		try {
++			group = new Settings;
++			created = true;
++			group->fromJson(getJson(name));
++		} catch (std::exception e) {
++			//errorstream<<"fail " << e.what() << std::endl;
++			if (created)
++				delete group;
++			return false;
++		}
++	}
+ 
+ 	group->getFloatNoEx("offset",      np.offset);
+ 	group->getFloatNoEx("scale",       np.scale);
+@@ -556,6 +582,13 @@
+ 	if (!group->getFlagStrNoEx("flags", np.flags, flagdesc_noiseparams))
+ 		np.flags = NOISE_FLAG_DEFAULTS;
+ 
++	group->getFloatNoEx("farscale",      np.far_scale);
++	group->getFloatNoEx("farspread",     np.far_spread);
++	group->getFloatNoEx("farpersist",    np.far_persist);
++	group->getFloatNoEx("farlacunarity", np.far_lacunarity);
++
++	if (created)
++		delete group;
+ 	return true;
+ }
+ 
+@@ -810,7 +843,7 @@
+ }
+ 
+ 
+-bool Settings::setU64(const std::string &name, u64 value)
++bool Settings::setU64(const std::string &name, uint64_t value)
+ {
+ 	std::ostringstream os;
+ 	os << value;
+@@ -872,6 +905,11 @@
+ 	group->setFloat("lacunarity",  np.lacunarity);
+ 	group->setFlagStr("flags",     np.flags, flagdesc_noiseparams, np.flags);
+ 
++	group->setFloat("farscale",    np.far_scale);
++	group->setFloat("farspread",   np.far_spread);
++	group->setFloat("farpersist",  np.far_persist);
++	group->setFloat("farlacunarity",  np.far_lacunarity);
++
+ 	return setEntry(name, &group, true, set_default);
+ }
+ 
+@@ -880,6 +918,7 @@
+ {
+ 	MutexAutoLock lock(m_mutex);
+ 
++	m_json.removeMember(name);
+ 	std::map<std::string, SettingsEntry>::iterator it = m_settings.find(name);
+ 	if (it != m_settings.end()) {
+ 		delete it->second.group;
+@@ -973,6 +1012,9 @@
+ 		delete it->second.group;
+ 	m_settings.clear();
+ 
++	if (m_json.isObject() || m_json.isArray())
++		m_json.clear();
++
+ 	clearDefaultsNoLock();
+ }
+ 
+@@ -1020,3 +1062,126 @@
+ 			(it->first)(name, it->second);
+ 	}
+ }
++
++
++Json::Value Settings::getJson(const std::string & name, const Json::Value & def) {
++	{
++		MutexAutoLock lock(m_mutex);
++		if (!m_json[name].empty() || m_json[name].isObject() || m_json[name].isArray())
++			return m_json.get(name, def);
++	}
++
++	//todo: remove later:
++
++	Json::Value root;
++	Settings * group = nullptr;
++	if (getGroupNoEx(name, group)) {
++		group->toJson(root);
++		return root;
++	}
++
++	std::string value;
++	getNoEx(name, value);
++	if (value.empty())
++		return def;
++	if (!json_reader.parse( value, root ) ) {
++		errorstream  << "Failed to parse json conf var [" << name << "]='" << value <<"' : " << json_reader.getFormattedErrorMessages()<<std::endl;
++	}
++	return root;
++}
++
++void Settings::setJson(const std::string & name, const Json::Value & value) {
++	if (!value.empty())
++		set(name, json_writer.write( value )); //todo: remove later
++
++	MutexAutoLock lock(m_mutex);
++	m_json[name] = value;
++}
++
++bool Settings::toJson(Json::Value &json) const {
++	MutexAutoLock lock(m_mutex);
++
++	json = m_json;
++
++	for (const auto & ir: m_settings)
++	if (json[ir.first].empty()) {
++		if (ir.second.is_group && ir.second.group) {
++			Json::Value v;
++			ir.second.group->toJson(v);
++			if (!v.empty())
++				json[ir.first] = v;
++		} else {
++			json[ir.first] = ir.second.value;
++		}
++	}
++
++	for (const auto & key: m_json.getMemberNames())
++		if (!m_json[key].empty())
++			json[key] = m_json[key];
++
++	return true;
++}
++
++bool Settings::fromJson(const Json::Value &json) {
++	if (!json.isObject())
++		return false;
++	m_json = json;
++	for (const auto & key: json.getMemberNames()) {
++		if (json[key].isObject()) {
++			//setJson(key, json[key]); // save type info
++			auto s = new Settings;
++			s->fromJson(json[key]);
++			setGroup(key, s);
++		} else if (json[key].isArray()) {
++			//setJson(key, json[key]);
++		} else {
++			set(key, json[key].asString());
++			m_json.removeMember(key); // todo: remove. json comments drops here
++		}
++	}
++	return true;
++}
++
++bool Settings::writeJsonFile(const std::string &filename) {
++	Json::Value json;
++	toJson(json);
++
++	std::ostringstream os(std::ios_base::binary);
++	os << json;
++
++	if (!fs::safeWriteToFile(filename.c_str(), os.str())) {
++		errorstream << "Error writing json configuration file: \"" << filename << "\"" << std::endl;
++		return false;
++	}
++	return true;
++}
++
++bool Settings::readJsonFile(const std::string &filename) {
++	std::ifstream is(filename.c_str(), std::ios_base::binary);
++	if (!is.good())
++		return false;
++	Json::Value json;
++	try {
++		is >> json;
++	} catch (std::exception &e) {
++		errorstream << "Error reading json file: \"" << filename << "\" : " << e.what() << std::endl;
++		return false;
++	}
++	return fromJson(json);
++}
++
++void Settings::msgpack_pack(msgpack::packer<msgpack::sbuffer> &pk) const {
++	Json::Value json;
++	toJson(json);
++	std::ostringstream os(std::ios_base::binary);
++	os << json;
++	pk.pack(os.str());
++}
++
++void Settings::msgpack_unpack(msgpack::object o) {
++	std::string data;
++	o.convert(data);
++	std::istringstream os(data, std::ios_base::binary);
++	os >> m_json;
++	fromJson(m_json);
++}

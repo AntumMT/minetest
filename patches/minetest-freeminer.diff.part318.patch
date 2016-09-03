@@ -1,0 +1,86 @@
+diff -ruN minetest-master/src/localplayer.h minetest-freeminer/src/localplayer.h
+--- minetest-master/src/localplayer.h	2016-09-03 16:15:52.525778000 -0700
++++ minetest-freeminer/src/localplayer.h	2016-09-03 15:43:59.638739000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++localplayer.h
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #ifndef LOCALPLAYER_HEADER
+@@ -24,6 +27,8 @@
+ #include <list>
+ 
+ class Environment;
++class ClientEnvironment;
++struct MapNode;
+ class GenericCAO;
+ class ClientActiveObject;
+ 
+@@ -49,8 +54,9 @@
+ 	void move(f32 dtime, Environment *env, f32 pos_max_d);
+ 	void move(f32 dtime, Environment *env, f32 pos_max_d,
+ 			std::vector<CollisionInfo> *collision_info);
++	bool canPlaceNode(const v3s16& p, const MapNode& node);
+ 
+-	void applyControl(float dtime);
++	void applyControl(float dtime, ClientEnvironment *env);
+ 
+ 	v3s16 getStandingNodePos();
+ 
+@@ -66,8 +72,11 @@
+ 	int last_animation;
+ 	float last_animation_speed;
+ 
++	/*
+ 	std::string hotbar_image;
++	int hotbar_image_items;
+ 	std::string hotbar_selected_image;
++	*/
+ 
+ 	video::SColor light_color;
+ 
+@@ -81,14 +90,16 @@
+ 	}
+ 
+ private:
+-	void accelerateHorizontal(const v3f &target_speed, const f32 max_increase);
++	void accelerateHorizontal(const v3f &target_speed, const f32 max_increase, float slippery = 0);
+ 	void accelerateVertical(const v3f &target_speed, const f32 max_increase);
+ 
+ 	// This is used for determining the sneaking range
+ 	v3s16 m_sneak_node;
+ 	// Whether the player is allowed to sneak
++public:
+ 	bool m_sneak_node_exists;
+ 	// Whether recalculation of the sneak node is needed
++private:
+ 	bool m_need_to_get_new_sneak_node;
+ 	// Stores the max player uplift by m_sneak_node and is updated
+ 	// when m_need_to_get_new_sneak_node == true

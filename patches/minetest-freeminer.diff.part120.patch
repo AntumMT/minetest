@@ -1,0 +1,30 @@
+diff -ruN minetest-master/client/shaders/water_surface_shader/opengl_fragment.glsl minetest-freeminer/client/shaders/water_surface_shader/opengl_fragment.glsl
+--- minetest-master/client/shaders/water_surface_shader/opengl_fragment.glsl	2016-09-03 16:15:52.685779000 -0700
++++ minetest-freeminer/client/shaders/water_surface_shader/opengl_fragment.glsl	2016-09-03 15:43:59.994741000 -0700
+@@ -5,6 +5,7 @@
+ uniform vec4 skyBgColor;
+ uniform float fogDistance;
+ uniform vec3 eyePosition;
++uniform vec3 sunPosition;
+ 
+ varying vec3 vPosition;
+ varying vec3 worldPosition;
+@@ -14,6 +15,8 @@
+ varying vec3 lightVec;
+ varying vec3 tsLightVec;
+ 
++uniform float wieldLight;
++
+ bool normalTexturePresent = false;
+ bool texTileableHorizontal = false;
+ bool texTileableVertical = false;
+@@ -148,7 +151,8 @@
+ 	color = base.rgb;
+ #endif
+ 
+-	vec4 col = vec4(color.rgb * gl_Color.rgb, 1.0); 
++	float light = max((wieldLight/2.0)/vPosition.z, 0.0);
++	vec4 col = vec4(color.rgb * min(gl_Color.rgb + light, 1.0), 1.0);
+ 
+ #if MATERIAL_TYPE == TILE_MATERIAL_LIQUID_TRANSPARENT || MATERIAL_TYPE == TILE_MATERIAL_LIQUID_OPAQUE
+ 	float alpha = gl_Color.a;

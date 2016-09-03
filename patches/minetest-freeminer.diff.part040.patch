@@ -1,0 +1,11 @@
+diff -ruN minetest-master/build/debian/freeminer.menu minetest-freeminer/build/debian/freeminer.menu
+--- minetest-master/build/debian/freeminer.menu	1969-12-31 16:00:00.000000000 -0800
++++ minetest-freeminer/build/debian/freeminer.menu	2016-09-03 15:43:59.986741000 -0700
+@@ -0,0 +1,7 @@
++?package(freeminer):\
++        needs="x11" \
++        section="Games/Adventure" \
++        command="/usr/games/freeminer" \
++        title="Freeminer" \
++        icon="/usr/share/icons/hicolor/24x24/apps/freeminer.xpm" \
++        longtitle="Multiplayer infinite-world block sandbox"

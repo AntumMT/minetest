@@ -1,0 +1,138 @@
+diff -ruN minetest-master/src/log.cpp minetest-freeminer/src/log.cpp
+--- minetest-master/src/log.cpp	2016-09-03 16:15:52.597779000 -0700
++++ minetest-freeminer/src/log.cpp	2016-09-03 15:43:59.754740000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++log.cpp
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "log.h"
+@@ -26,13 +29,13 @@
+ #include "config.h"
+ #include "exceptions.h"
+ #include "util/numeric.h"
+-#include "log.h"
+ 
+ #include <sstream>
+ #include <iostream>
+ #include <algorithm>
+ #include <cerrno>
+ #include <cstring>
++#include <mutex>
+ 
+ const int BUFFER_LENGTH = 256;
+ 
+@@ -47,6 +50,7 @@
+ 	std::streamsize xsputn(const char *s, std::streamsize n);
+ 	void push_back(char c);
+ 
++	Mutex m_log_mutex;
+ private:
+ 	char buffer[BUFFER_LENGTH];
+ 	int buffer_index;
+@@ -85,11 +89,17 @@
+ 
+ RawLogBuffer raw_buf;
+ 
++THREAD_LOCAL
+ LogBuffer none_buf(g_logger, LL_NONE);
++THREAD_LOCAL
+ LogBuffer error_buf(g_logger, LL_ERROR);
++THREAD_LOCAL
+ LogBuffer warning_buf(g_logger, LL_WARNING);
++THREAD_LOCAL
+ LogBuffer action_buf(g_logger, LL_ACTION);
++THREAD_LOCAL
+ LogBuffer info_buf(g_logger, LL_INFO);
++THREAD_LOCAL
+ LogBuffer verbose_buf(g_logger, LL_VERBOSE);
+ 
+ // Connection
+@@ -106,12 +116,19 @@
+ std::ostream *derr_client_ptr = &errorstream;
+ #endif
+ 
++THREAD_LOCAL
+ std::ostream rawstream(&raw_buf);
++THREAD_LOCAL
+ std::ostream dstream(&none_buf);
++THREAD_LOCAL
+ std::ostream errorstream(&error_buf);
++THREAD_LOCAL
+ std::ostream warningstream(&warning_buf);
++THREAD_LOCAL
+ std::ostream actionstream(&action_buf);
++THREAD_LOCAL
+ std::ostream infostream(&info_buf);
++THREAD_LOCAL
+ std::ostream verbosestream(&verbose_buf);
+ 
+ // Android
+@@ -256,9 +273,12 @@
+ 	std::map<threadid_t, std::string>::const_iterator it;
+ 
+ 	threadid_t id = thr_get_current_thread_id();
++	{
++	MutexAutoLock lock(m_mutex);
+ 	it = m_thread_names.find(id);
+ 	if (it != m_thread_names.end())
+ 		return it->second;
++	}
+ 
+ 	std::ostringstream os;
+ 	os << "#0x" << std::hex << id;
+@@ -335,6 +355,9 @@
+ 
+ std::streamsize StringBuffer::xsputn(const char *s, std::streamsize n)
+ {
++	if (!s)
++		return 0;
++	//MutexAutoLock lock(m_log_mutex);
+ 	for (int i = 0; i < n; ++i)
+ 		push_back(s[i]);
+ 	return n;
+@@ -361,6 +384,7 @@
+ 
+ void LogBuffer::flush(const std::string &buffer)
+ {
++	//MutexAutoLock lock(m_log_mutex);
+ 	logger.log(level, buffer);
+ }
+ 
+@@ -368,3 +392,9 @@
+ {
+ 	g_logger.logRaw(LL_NONE, buffer);
+ }
++
++Mutex localtime_mutex;
++tm * localtime_safe(time_t * t) {
++	auto lock = std::unique_lock<Mutex>(localtime_mutex);
++	return localtime(t);
++}

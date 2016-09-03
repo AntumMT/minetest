@@ -1,0 +1,17 @@
+diff -ruN minetest-master/src/intlGUIEditBox.h minetest-freeminer/src/intlGUIEditBox.h
+--- minetest-master/src/intlGUIEditBox.h	2016-09-03 16:15:52.445778000 -0700
++++ minetest-freeminer/src/intlGUIEditBox.h	2016-09-03 15:43:59.470738000 -0700
+@@ -125,6 +125,13 @@
+ 		//! Reads attributes of the element
+ 		virtual void deserializeAttributes(io::IAttributes* in, io::SAttributeReadWriteOptions* options);
+ 
++		virtual bool isDrawBackgroundEnabled() const { return false; }
++		virtual bool isDrawBorderEnabled() const { return true; }
++		virtual void setCursorChar(const wchar_t cursorChar) { };
++		virtual wchar_t getCursorChar() const { return L'_'; };
++		virtual void setCursorBlinkTime(irr::u32 timeMs) { };
++		virtual irr::u32 getCursorBlinkTime() const { return 500; } ;
++
+ 	protected:
+ 		//! Breaks the single text line.
+ 		void breakText();

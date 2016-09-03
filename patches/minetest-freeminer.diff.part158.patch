@@ -1,0 +1,69 @@
+diff -ruN minetest-master/src/cguittfont/CGUITTFont.cpp minetest-freeminer/src/cguittfont/CGUITTFont.cpp
+--- minetest-master/src/cguittfont/CGUITTFont.cpp	2016-09-03 16:15:52.649779000 -0700
++++ minetest-freeminer/src/cguittfont/CGUITTFont.cpp	2016-09-03 15:43:59.974741000 -0700
+@@ -188,6 +188,8 @@
+ 
+ 	glyph_page = parent->getLastGlyphPageIndex();
+ 	u32 texture_side_length = page->texture->getOriginalSize().Width;
++	if (!texture_side_length)
++		texture_side_length = 255;
+ 	core::vector2di page_position(
+ 		(page->used_slots % (texture_side_length / font_size)) * font_size,
+ 		(page->used_slots / (texture_side_length / font_size)) * font_size
+@@ -479,7 +481,7 @@
+ CGUITTGlyphPage* CGUITTFont::createGlyphPage(const u8& pixel_mode)
+ {
+ 	CGUITTGlyphPage* page = 0;
+-	
++
+ 	// Name of our page.
+ 	io::path name("TTFontGlyphPage_");
+ 	name += tt_face->family_name;
+@@ -490,9 +492,6 @@
+ 	name += "_";
+ 	name += Glyph_Pages.size(); // The newly created page will be at the end of the collection.
+ 
+-	// Create the new page.
+-	page = new CGUITTGlyphPage(Driver, name);
+-
+ 	// Determine our maximum texture size.
+ 	// If we keep getting 0, set it to 1024x1024, as that number is pretty safe.
+ 	core::dimension2du max_texture_size = max_page_texture_size;
+@@ -512,12 +511,15 @@
+ 	if (page_texture_size.Width > max_texture_size.Width || page_texture_size.Height > max_texture_size.Height)
+ 		page_texture_size = max_texture_size;
+ 
+-	if (!page->createPageTexture(pixel_mode, page_texture_size))
+-		// TODO: add error message?
+-		return 0;
++	// Create the new page.
++	page = new CGUITTGlyphPage(Driver, name);
+ 
+ 	if (page)
+ 	{
++		if (!page->createPageTexture(pixel_mode, page_texture_size))
++			// TODO: add error message?
++			return 0;
++
+ 		// Determine the number of glyph slots on the page and add it to the list of pages.
+ 		page->available_slots = (page_texture_size.Width / size) * (page_texture_size.Height / size);
+ 		Glyph_Pages.push_back(page);
+@@ -644,7 +646,10 @@
+ 
+ 		previousChar = currentChar;
+ 		++iter;
++		//++current_color;
+ 	}
++	if (applied_colors.empty())
++		applied_colors.push_back(irr::video::SColor(255, 255, 255, 255));
+ 
+ 	// Draw now.
+ 	update_glyph_pages();
+@@ -675,6 +680,7 @@
+ 				col.color |= 0xff000000;
+ 			Driver->draw2DImage(page->texture, page->render_positions[i], page->render_source_rects[i], clip, col, true);
+ 		}
++		// Driver->draw2DImageBatch(page->texture, page->render_positions, page->render_source_rects, clip, color, true);
+ 	}
+ }
+ 

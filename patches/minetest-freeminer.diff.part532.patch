@@ -1,0 +1,32 @@
+diff -ruN minetest-master/src/threading/mutex_auto_lock.h minetest-freeminer/src/threading/mutex_auto_lock.h
+--- minetest-master/src/threading/mutex_auto_lock.h	2016-09-03 16:15:52.681779000 -0700
++++ minetest-freeminer/src/threading/mutex_auto_lock.h	2016-09-03 15:43:59.810740000 -0700
+@@ -26,6 +26,15 @@
+ #ifndef THREADING_MUTEX_AUTO_LOCK_H
+ #define THREADING_MUTEX_AUTO_LOCK_H
+ 
++
++#include <mutex>
++#include "threading/mutex.h"
++
++using MutexAutoLock = std::unique_lock<Mutex>;
++using RecursiveMutexAutoLock = std::unique_lock<RecursiveMutex>;
++
++#if WTF
++
+ #if __cplusplus >= 201103L
+ 	#include <mutex>
+ 	using MutexAutoLock = std::unique_lock<std::mutex>;
+@@ -34,7 +43,6 @@
+ 
+ #include "threading/mutex.h"
+ 
+-
+ class MutexAutoLock
+ {
+ public:
+@@ -58,3 +66,4 @@
+ 
+ #endif
+ 
++#endif

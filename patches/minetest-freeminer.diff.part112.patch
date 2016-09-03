@@ -1,0 +1,19 @@
+diff -ruN minetest-master/builtin/mainmenu/tab_settings.lua minetest-freeminer/builtin/mainmenu/tab_settings.lua
+--- minetest-master/builtin/mainmenu/tab_settings.lua	2016-09-03 16:15:52.577779000 -0700
++++ minetest-freeminer/builtin/mainmenu/tab_settings.lua	2016-09-03 15:43:59.914741000 -0700
+@@ -214,6 +214,15 @@
+ 	end
+ 
+ 	tab_string = tab_string ..
++
++		""
++		if PLATFORM ~= "Android" then
++		tab_string = tab_string ..
++		"button[8,4.75;3.75,0.5;btn_change_keys;" .. fgettext("Change keys") .. "]" ..
++		""
++		end
++		tab_string = tab_string ..
++
+ 		"button[0,4.75;3.75,0.5;btn_advanced_settings;"
+ 		.. fgettext("Advanced Settings") .. "]"
+ 

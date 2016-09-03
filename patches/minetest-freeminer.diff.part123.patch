@@ -1,0 +1,27 @@
+diff -ruN minetest-master/cmake/Modules/FindGettextLib.cmake minetest-freeminer/cmake/Modules/FindGettextLib.cmake
+--- minetest-master/cmake/Modules/FindGettextLib.cmake	2016-09-03 16:15:52.457778000 -0700
++++ minetest-freeminer/cmake/Modules/FindGettextLib.cmake	2016-09-03 15:43:59.854740000 -0700
+@@ -61,7 +61,17 @@
+ if(GETTEXT_FOUND)
+ 	# BSD variants require special linkage as they don't use glibc
+ 	if(${CMAKE_SYSTEM_NAME} MATCHES "BSD")
+-		set(GETTEXT_LIBRARY "intl")
++		#set(GETTEXT_LIBRARY "intl")
++			FIND_LIBRARY(GETTEXT_LIBRARY NAMES intl
++				PATHS
++				/usr/local/lib
++				/usr/lib
++			)
++			FIND_LIBRARY(ICONV_LIBRARY NAMES iconv
++				PATHS
++				/usr/local/lib
++				/usr/lib
++			)
+ 	endif()
+ 
+ 	set(GETTEXT_PO_PATH ${CMAKE_SOURCE_DIR}/po)
+@@ -75,4 +85,3 @@
+ 		string(REPLACE "<locale>" ${_locale} ${_destvar} ${GETTEXT_MO_DEST_PATH})
+ 	endmacro()
+ endif()
+-

@@ -1,0 +1,6 @@
+diff -ruN minetest-master/build/debian/TODO minetest-freeminer/build/debian/TODO
+--- minetest-master/build/debian/TODO	1969-12-31 16:00:00.000000000 -0800
++++ minetest-freeminer/build/debian/TODO	2016-09-03 15:43:59.766740000 -0700
+@@ -0,0 +1,2 @@
++- The server should be automatically started using an init.d script
++- Ideally, the server configuration should be through a /etc/default/minetest-server file

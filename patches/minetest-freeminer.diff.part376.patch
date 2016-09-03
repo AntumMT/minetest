@@ -1,0 +1,18 @@
+diff -ruN minetest-master/src/msgpack_fix.h minetest-freeminer/src/msgpack_fix.h
+--- minetest-master/src/msgpack_fix.h	1969-12-31 16:00:00.000000000 -0800
++++ minetest-freeminer/src/msgpack_fix.h	2016-09-03 15:43:59.826740000 -0700
+@@ -0,0 +1,14 @@
++
++#if defined(__APPLE__)
++	#undef nil
++#endif
++
++#if (defined(WIN32) || defined(_WIN32) || defined(_WIN32_WCE))
++	#define WIN32_LEAN_AND_MEAN
++	#ifndef _WIN32_WINNT
++		#define _WIN32_WINNT 0x0501
++	#endif
++#endif
++
++
++#include <msgpack.hpp>

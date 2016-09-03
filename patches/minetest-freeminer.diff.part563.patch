@@ -1,0 +1,31 @@
+diff -ruN minetest-master/src/util/srp.cpp minetest-freeminer/src/util/srp.cpp
+--- minetest-master/src/util/srp.cpp	2016-09-03 16:15:52.513778000 -0700
++++ minetest-freeminer/src/util/srp.cpp	2016-09-03 15:43:59.878740000 -0700
+@@ -41,6 +41,8 @@
+ 
+ #include <config.h>
+ 
++#include <cstddef> // fix gmp: error: ‘::max_align_t’ has not been declared
++
+ #if USE_SYSTEM_GMP || defined (__ANDROID__) || defined (ANDROID)
+ 	#include <gmp.h>
+ #else
+@@ -611,7 +613,7 @@
+ 			if (fill_buff() != SRP_OK) goto error_and_exit;
+ 		*bytes_s = (unsigned char *)srp_alloc(size_to_fill);
+ 		if (!*bytes_s) goto error_and_exit;
+-		memcpy(*bytes_s, &g_rand_buff + g_rand_idx, size_to_fill);
++		memcpy(*bytes_s, g_rand_buff + g_rand_idx, size_to_fill);
+ 		g_rand_idx += size_to_fill;
+ 	}
+ 
+@@ -969,7 +971,8 @@
+ 	mpz_t tmp4; mpz_init(tmp4);
+ 	// clang-format on
+ 
+-	*len_M = 0;
++	if(len_M)
++		*len_M = 0;
+ 	*bytes_M = 0;
+ 
+ 	if (!H_nn(u, usr->hash_alg, usr->ng->N, usr->A, B)) goto cleanup_and_exit;

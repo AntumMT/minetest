@@ -1,0 +1,112 @@
+diff -ruN minetest-master/src/log.h minetest-freeminer/src/log.h
+--- minetest-master/src/log.h	2016-09-03 16:15:52.441778000 -0700
++++ minetest-freeminer/src/log.h	2016-09-03 15:43:59.470738000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++log.h
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #ifndef LOG_HEADER
+@@ -25,8 +28,12 @@
+ #include <string>
+ #include <fstream>
+ #include "threads.h"
++#include "threading/mutex.h"
++#include "threading/mutex_auto_lock.h"
+ #include "irrlichttypes.h"
+ 
++#include "threading/thread_local.h"
++
+ class ILogOutput;
+ 
+ enum LogLevel {
+@@ -79,7 +86,9 @@
+ 	// Works on all known architectures (x86, ARM, MIPS).
+ 	volatile bool m_silenced_levels[LL_MAX];
+ 	std::map<threadid_t, std::string> m_thread_names;
++protected:
+ 	mutable Mutex m_mutex;
++private:
+ 	bool m_trace_enabled;
+ };
+ 
+@@ -145,11 +154,13 @@
+ 
+ 	void logRaw(LogLevel lev, const std::string &line)
+ 	{
++		//MutexAutoLock lock(m_mutex);
+ 		m_buffer.push(line);
+ 	}
+ 
+ 	bool empty()
+ 	{
++		//MutexAutoLock lock(m_mutex);
+ 		return m_buffer.empty();
+ 	}
+ 
+@@ -157,12 +168,15 @@
+ 	{
+ 		if (empty())
+ 			return "";
++		//MutexAutoLock lock(m_mutex);
+ 		std::string s = m_buffer.front();
+ 		m_buffer.pop();
+ 		return s;
+ 	}
+ 
+ private:
++	//mutable Mutex m_mutex;
++
+ 	std::queue<std::string> m_buffer;
+ 	Logger &m_logger;
+ };
+@@ -185,14 +199,15 @@
+ extern Logger g_logger;
+ 
+ // Writes directly to all LL_NONE log outputs for g_logger with no prefix.
+-extern std::ostream rawstream;
+ 
+-extern std::ostream errorstream;
+-extern std::ostream warningstream;
+-extern std::ostream actionstream;
+-extern std::ostream infostream;
+-extern std::ostream verbosestream;
+-extern std::ostream dstream;
++extern THREAD_LOCAL std::ostream rawstream;
++
++extern THREAD_LOCAL std::ostream errorstream;
++extern THREAD_LOCAL std::ostream warningstream;
++extern THREAD_LOCAL std::ostream actionstream;
++extern THREAD_LOCAL std::ostream infostream;
++extern THREAD_LOCAL std::ostream verbosestream;
++extern THREAD_LOCAL std::ostream dstream;
+ 
+ #define TRACEDO(x) do {               \
+ 	if (g_logger.getTraceEnabled()) { \

@@ -1,0 +1,5 @@
+diff -ruN minetest-master/build/debian/source/format minetest-freeminer/build/debian/source/format
+--- minetest-master/build/debian/source/format	1969-12-31 16:00:00.000000000 -0800
++++ minetest-freeminer/build/debian/source/format	2016-09-03 15:43:59.510738000 -0700
+@@ -0,0 +1 @@
++3.0 (quilt)

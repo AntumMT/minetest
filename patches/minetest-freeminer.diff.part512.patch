@@ -1,0 +1,92 @@
+diff -ruN minetest-master/src/socket.cpp minetest-freeminer/src/socket.cpp
+--- minetest-master/src/socket.cpp	2016-09-03 16:15:52.697779000 -0700
++++ minetest-freeminer/src/socket.cpp	2016-09-03 15:43:59.826740000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++socket.cpp
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "socket.h"
+@@ -231,7 +234,7 @@
+ 	if (inet_ntop(m_addr_family, (m_addr_family == AF_INET) ? (void*)&(m_address.ipv4.sin_addr) : (void*)&(m_address.ipv6.sin6_addr), str, INET6_ADDRSTRLEN) == NULL) {
+ 		return std::string("");
+ 	}
+-	return std::string(str);
++	return std::string(str) + ((m_addr_family == AF_INET6) ? (m_address.ipv6.sin6_scope_id ? "%" + itos(m_address.ipv6.sin6_scope_id) : "") : "");
+ #endif
+ }
+ 
+@@ -300,6 +303,7 @@
+ void Address::setPort(u16 port)
+ {
+ 	m_port = port;
++	m_address.ipv6.sin6_port = ntohs(m_port);
+ }
+ 
+ void Address::print(std::ostream *s) const
+@@ -348,6 +352,9 @@
+ 
+ 	setTimeoutMs(0);
+ 
++	int set_option_off = 0;
++	setsockopt(m_handle, IPPROTO_IPV6, IPV6_V6ONLY, (const char*) &set_option_off, sizeof(set_option_off));
++
+ 	return true;
+ }
+ 
+@@ -487,10 +494,13 @@
+ 		if(received < 0)
+ 			return -1;
+ 
++/*
+ 		u16 address_port = ntohs(address.sin6_port);
+ 		IPv6AddressBytes bytes;
+ 		memcpy(bytes.bytes, address.sin6_addr.s6_addr, 16);
+ 		sender = Address(&bytes, address_port);
++*/
++		sender = address;
+ 	} else {
+ 		struct sockaddr_in address;
+ 		memset(&address, 0, sizeof(address));
+@@ -503,10 +513,14 @@
+ 		if(received < 0)
+ 			return -1;
+ 
++/*
+ 		u32 address_ip = ntohl(address.sin_addr.s_addr);
+ 		u16 address_port = ntohs(address.sin_port);
+ 
+ 		sender = Address(address_ip, address_port);
++*/
++
++		sender = address;
+ 	}
+ 
+ 	if (socket_enable_debug_output) {

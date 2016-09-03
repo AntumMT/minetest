@@ -1,0 +1,68 @@
+diff -ruN minetest-master/src/sky.h minetest-freeminer/src/sky.h
+--- minetest-master/src/sky.h	2016-09-03 16:15:52.589779000 -0700
++++ minetest-freeminer/src/sky.h	2016-09-03 15:43:59.930741000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++sky.h
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "irrlichttypes_extrabloated.h"
+@@ -28,6 +31,17 @@
+ #define SKY_STAR_COUNT 200
+ 
+ class ITextureSource;
++class Map;
++class Player;
++class INodeDefManager;
++
++enum class SKY_ROTATE {
++	SUN,
++	MOON,
++	STAR,
++	SUNLIGHT,
++	MOONLIGHT
++};
+ 
+ // Skybox, rendered with zbuffer turned off, before all other nodes.
+ class Sky : public scene::ISceneNode
+@@ -136,6 +150,13 @@
+ 	video::ITexture* m_moon_texture;
+ 	video::ITexture* m_sun_tonemap;
+ 	video::ITexture* m_moon_tonemap;
++
++public:
++	irr::scene::ILightSceneNode * sun_moon_light;
++	v3POS camera_offset;
++	void sky_rotate(const scene::ICameraSceneNode* camera, SKY_ROTATE type, float wicked_time_of_day, v3f & Pos);
++private:
++
+ };
+ 
+ #endif

@@ -1,0 +1,159 @@
+diff -ruN minetest-master/src/chat.cpp minetest-freeminer/src/chat.cpp
+--- minetest-master/src/chat.cpp	2016-09-03 16:15:52.497778000 -0700
++++ minetest-freeminer/src/chat.cpp	2016-09-03 15:43:59.870740000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++chat.cpp
+ Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "chat.h"
+@@ -25,6 +28,7 @@
+ #include <sstream>
+ #include "util/string.h"
+ #include "util/numeric.h"
++#include "settings.h"
+ 
+ ChatBuffer::ChatBuffer(u32 scrollback):
+ 	m_scrollback(scrollback),
+@@ -267,6 +271,7 @@
+ 		next_frags.push_back(temp_frag);
+ 	}
+ 
++	//fmold: std::wstring name_sanitized = sanitizeChatString(line.name);
+ 	std::wstring name_sanitized = line.name.c_str();
+ 
+ 	// Choose an indentation level
+@@ -336,7 +341,7 @@
+ 			while (frag_length < remaining_in_input &&
+ 					frag_length < remaining_in_output)
+ 			{
+-				if (isspace(line.text.getString()[in_pos + frag_length]))
++				if (std::isspace(line.text.getString()[in_pos + frag_length]))
+ 					space_pos = frag_length;
+ 				++frag_length;
+ 			}
+@@ -452,6 +457,13 @@
+ 	return old_line;
+ }
+ 
++void ChatPrompt::historyPush(std::wstring line) {
++	m_history.push_back(line);
++	if (m_history.size() > m_history_limit)
++		m_history.erase(m_history.begin());
++	m_history_index = m_history.size();
++}
++
+ void ChatPrompt::historyPrev()
+ {
+ 	if (m_history_index != 0)
+@@ -493,9 +505,9 @@
+ 	{
+ 		// no previous nick completion is active
+ 		prefix_start = prefix_end = m_cursor;
+-		while (prefix_start > 0 && !isspace(m_line[prefix_start-1]))
++		while (prefix_start > 0 && !std::isspace(m_line[prefix_start-1]))
+ 			--prefix_start;
+-		while (prefix_end < m_line.size() && !isspace(m_line[prefix_end]))
++		while (prefix_end < m_line.size() && !std::isspace(m_line[prefix_end]))
+ 			++prefix_end;
+ 		if (prefix_start == prefix_end)
+ 			return;
+@@ -524,7 +536,7 @@
+ 	u32 replacement_index = 0;
+ 	if (!initial)
+ 	{
+-		while (word_end < m_line.size() && !isspace(m_line[word_end]))
++		while (word_end < m_line.size() && !std::isspace(m_line[word_end]))
+ 			++word_end;
+ 		std::wstring word = m_line.substr(prefix_start, word_end - prefix_start);
+ 
+@@ -543,7 +555,7 @@
+ 		}
+ 	}
+ 	std::wstring replacement = completions[replacement_index];
+-	if (word_end < m_line.size() && isspace(word_end))
++	if (word_end < m_line.size() && std::isspace(word_end))
+ 		++word_end;
+ 
+ 	// replace existing word with replacement word,
+@@ -598,17 +610,17 @@
+ 	case CURSOROP_SCOPE_WORD:
+ 		if (dir == CURSOROP_DIR_RIGHT) {
+ 			// skip one word to the right
+-			while (new_cursor < length && isspace(m_line[new_cursor]))
++			while (new_cursor < length && std::isspace(m_line[new_cursor]))
+ 				new_cursor++;
+-			while (new_cursor < length && !isspace(m_line[new_cursor]))
++			while (new_cursor < length && !std::isspace(m_line[new_cursor]))
+ 				new_cursor++;
+-			while (new_cursor < length && isspace(m_line[new_cursor]))
++			while (new_cursor < length && std::isspace(m_line[new_cursor]))
+ 				new_cursor++;
+ 		} else {
+ 			// skip one word to the left
+-			while (new_cursor >= 1 && isspace(m_line[new_cursor - 1]))
++			while (new_cursor >= 1 && std::isspace(m_line[new_cursor - 1]))
+ 				new_cursor--;
+-			while (new_cursor >= 1 && !isspace(m_line[new_cursor - 1]))
++			while (new_cursor >= 1 && !std::isspace(m_line[new_cursor - 1]))
+ 				new_cursor--;
+ 		}
+ 		break;
+@@ -673,6 +685,7 @@
+ 
+ ChatBackend::ChatBackend():
+ 	m_console_buffer(500),
++	//m_recent_buffer(g_settings->getU16("chat_buffer_size")),
+ 	m_recent_buffer(6),
+ 	m_prompt(L"]", 500)
+ {
+@@ -735,6 +748,7 @@
+ 		const ChatLine& line = m_recent_buffer.getLine(i);
+ 		if (i != 0)
+ 			result += L"\n";
++			//fmold: \v#ffffff
+ 		if (!line.name.empty()) {
+ 			result += L"<";
+ 			result += line.name;
+@@ -768,7 +782,13 @@
+ void ChatBackend::step(float dtime)
+ {
+ 	m_recent_buffer.step(dtime);
+-	m_recent_buffer.deleteByAge(60.0);
++	m_recent_buffer.deleteByAge(
++#ifdef __ANDROID__
++20.0
++#else
++60.0
++#endif
++	);
+ 
+ 	// no need to age messages in anything but m_recent_buffer
+ }

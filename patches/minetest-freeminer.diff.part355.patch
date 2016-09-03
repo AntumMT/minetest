@@ -1,0 +1,21 @@
+diff -ruN minetest-master/src/mapgen_valleys.cpp minetest-freeminer/src/mapgen_valleys.cpp
+--- minetest-master/src/mapgen_valleys.cpp	2016-09-03 16:15:52.605779000 -0700
++++ minetest-freeminer/src/mapgen_valleys.cpp	2016-09-03 15:43:59.758740000 -0700
+@@ -158,7 +158,7 @@
+ }
+ 
+ 
+-void MapgenValleysParams::readParams(const Settings *settings)
++void MapgenValleysParams::readParams(Settings *settings)
+ {
+ 	settings->getFlagStrNoEx("mgvalleys_spflags",        spflags, flagdesc_mapgen_valleys);
+ 	settings->getU16NoEx("mgvalleys_altitude_chill",     altitude_chill);
+@@ -272,7 +272,7 @@
+ 
+ 	//TimeTaker tll("liquid_lighting");
+ 
+-	updateLiquid(&data->transforming_liquid, full_node_min, full_node_max);
++	updateLiquid(full_node_min, full_node_max);
+ 
+ 	if (flags & MG_LIGHT)
+ 		calcLighting(

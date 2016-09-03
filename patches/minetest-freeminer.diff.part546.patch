@@ -1,0 +1,154 @@
+diff -ruN minetest-master/src/treegen.cpp minetest-freeminer/src/treegen.cpp
+--- minetest-master/src/treegen.cpp	2016-09-03 16:15:52.589779000 -0700
++++ minetest-freeminer/src/treegen.cpp	2016-09-03 15:43:59.742740000 -0700
+@@ -1,20 +1,24 @@
+ /*
+-Minetest
++treegen.cpp
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>,
+-			  2012-2013 RealBadAngel, Maciej Kasatkin <mk@realbadangel.pl>
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Copyright (C) 2012-2013 RealBadAngel, Maciej Kasatkin <mk@realbadangel.pl>
++*/
++
++/*
++This file is part of Freeminer.
++
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include "irr_v3d.h"
+@@ -27,6 +31,8 @@
+ #include "nodedef.h"
+ #include "treegen.h"
+ 
++#include "log.h"
++
+ namespace treegen
+ {
+ 
+@@ -43,7 +49,7 @@
+ 	MapNode applenode(ndef->getId("mapgen_apple"));
+ 
+ 	PseudoRandom pr(seed);
+-	s16 trunk_h = pr.range(4, 5);
++	s16 trunk_h = pr.range(4, 6);
+ 	v3s16 p1 = p0;
+ 	for (s16 ii = 0; ii < trunk_h; ii++) {
+ 		if (vmanip.m_area.contains(p1)) {
+@@ -56,7 +62,8 @@
+ 	// p1 is now the last piece of the trunk
+ 	p1.Y -= 1;
+ 
+-	VoxelArea leaves_a(v3s16(-2, -1, -2), v3s16(2, 2, 2));
++	s16 size = pr.range(2, 3);
++	VoxelArea leaves_a(v3s16(-size, -pr.range(2, 3), -size), v3s16(size, pr.range(2, 3), size));
+ 	//SharedPtr<u8> leaves_d(new u8[leaves_a.getVolume()]);
+ 	Buffer<u8> leaves_d(leaves_a.getVolume());
+ 	for (s32 i = 0; i < leaves_a.getVolume(); i++)
+@@ -129,16 +136,18 @@
+ 	vmanip.blitBackAll(&modified_blocks);
+ 
+ 	// update lighting
+-	std::map<v3s16, MapBlock*> lighting_modified_blocks;
++	concurrent_map<v3POS, MapBlock*> lighting_modified_blocks;
+ 	lighting_modified_blocks.insert(modified_blocks.begin(), modified_blocks.end());
+ 	map->updateLighting(lighting_modified_blocks, modified_blocks);
+ 	// Send a MEET_OTHER event
+ 	MapEditEvent event;
+ 	event.type = MEET_OTHER;
++/*
+ 	for (std::map<v3s16, MapBlock*>::iterator
+ 			i = modified_blocks.begin();
+ 			i != modified_blocks.end(); ++i)
+ 		event.modified_blocks.insert(i->first);
++*/
+ 	map->dispatchEvent(&event);
+ 	return SUCCESS;
+ }
+@@ -698,7 +707,8 @@
+ 	// p1 is now the last piece of the trunk
+ 	p1.Y -= 1;
+ 
+-	VoxelArea leaves_a(v3s16(-3, -2, -3), v3s16(3, 2, 3));
++	s16 size = pr.range(2, 4);
++	VoxelArea leaves_a(v3s16(-size, -pr.range(2, 4), -size), v3s16(size, pr.range(2, 4), size));
+ 	//SharedPtr<u8> leaves_d(new u8[leaves_a.getVolume()]);
+ 	Buffer<u8> leaves_d(leaves_a.getVolume());
+ 	for (s32 i = 0; i < leaves_a.getVolume(); i++)
+@@ -783,14 +793,15 @@
+ 	// Make p1 the top node of the trunk
+ 	p1.Y -= 1;
+ 
+-	VoxelArea leaves_a(v3s16(-3, -6, -3), v3s16(3, 3, 3));
++	u16 size = pr.range(2, 4);
++	VoxelArea leaves_a(v3s16(-4, -4*2, -4), v3s16(4, 4, 4));
+ 	//SharedPtr<u8> leaves_d(new u8[leaves_a.getVolume()]);
+ 	Buffer<u8> leaves_d(leaves_a.getVolume());
+ 	for (s32 i = 0; i < leaves_a.getVolume(); i++)
+ 		leaves_d[i] = 0;
+ 
+ 	// Upper branches
+-	u16 dev = 3;
++	u16 dev = size;
+ 	for (s16 yy = -1; yy <= 1; yy++) {
+ 		for (s16 zz = -dev; zz <= dev; zz++) {
+ 			u32 i = leaves_a.index(v3s16(-dev, yy, zz));
+@@ -836,7 +847,7 @@
+ 		}
+ 	}
+ 
+-	dev = 2;
++	dev = size-1;
+ 	for (s16 yy = my + 1; yy <= my + 2; yy++) {
+ 		for (s16 zz = -dev; zz <= dev; zz++) {
+ 			u32 i = leaves_a.index(v3s16(-dev, yy, zz));
+@@ -876,4 +887,30 @@
+ 	}
+ }
+ 
++void make_cavetree(MMVManip &vmanip, v3POS p0,
++		bool is_jungle_tree, INodeDefManager *ndef, int seed)
++{
++	MapNode treenode(ndef->getId(is_jungle_tree ? "mapgen_jungletree" : "mapgen_tree"));
++	MapNode leavesnode(ndef->getId(is_jungle_tree ? "mapgen_jungleleaves" : "mapgen_leaves"));
++
++	PseudoRandom pr(seed);
++	POS trunk_h = pr.range(2, pr.range(2, 5));
++	v3POS p1 = p0;
++	for(POS ii=0; ii<trunk_h; ii++)
++	{
++		if(vmanip.m_area.contains(p1)) {
++			if(vmanip.getNodeNoExNoEmerge(p1).getContent() != CONTENT_AIR)
++				return;
++			if (ii == 0 && vmanip.getNodeNoExNoEmerge(p1).getLight(LIGHTBANK_DAY, ndef) == LIGHT_SUN)
++				return;
++			vmanip.m_data[vmanip.m_area.index(p1)] = treenode;
++		}
++		p1.Y++;
++	}
++	if(vmanip.m_area.contains(p1))
++		if(vmanip.getNodeNoExNoEmerge(p1).getContent() != CONTENT_AIR)
++			return;
++		vmanip.m_data[vmanip.m_area.index(p1)] = leavesnode;
++}
++
+ }; // namespace treegen

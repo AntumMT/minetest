@@ -1,0 +1,118 @@
+diff -ruN minetest-master/src/touchscreengui.cpp minetest-freeminer/src/touchscreengui.cpp
+--- minetest-master/src/touchscreengui.cpp	2016-09-03 16:15:52.645779000 -0700
++++ minetest-freeminer/src/touchscreengui.cpp	2016-09-03 15:43:59.974741000 -0700
+@@ -16,6 +16,9 @@
+ 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+ 
++#include "fm_touchscreengui.cpp"
++#if 0
++
+ #include "touchscreengui.h"
+ #include "irrlichttypes.h"
+ #include "irr_v2d.h"
+@@ -39,7 +42,7 @@
+ 
+ extern Settings *g_settings;
+ 
+-const char** touchgui_button_imagenames = (const char*[]) {
++const char* touchgui_button_imagenames[] = {
+ 	"up_arrow.png",
+ 	"down_arrow.png",
+ 	"left_arrow.png",
+@@ -98,11 +101,12 @@
+ 			key = "rangeselect";
+ 			break;
+ 	}
+-	assert(key != "");
++	if(!key.size())
++		return irr::EKEY_CODE();
+ 	return keyname_to_keycode(g_settings->get("keymap_" + key).c_str());
+ }
+ 
+-TouchScreenGUI *g_touchscreengui;
++TouchScreenGUI *g_touchscreengui = nullptr;
+ 
+ static void load_button_texture(button_info* btn, const char* path,
+ 		rect<s32> button_rect, ISimpleTextureSource* tsrc, video::IVideoDriver *driver)
+@@ -155,6 +159,7 @@
+ 	m_lower_right = LowerRight;
+ 
+ 	/* init settings bar */
++	clear();
+ 
+ 	irr::core::rect<int> current_button = rect<s32>(UpperLeft.X, UpperLeft.Y,
+ 			LowerRight.X, LowerRight.Y);
+@@ -175,10 +180,24 @@
+ 	m_initialized = true;
+ }
+ 
+-AutoHideButtonBar::~AutoHideButtonBar()
++void AutoHideButtonBar::clear()
+ {
++	if (m_starter.guibutton) {
+ 	m_starter.guibutton->setVisible(false);
+ 	m_starter.guibutton->drop();
++	}
++
++	for (auto i : m_buttons) {
++		i->guibutton->drop();
++		delete i;
++	}
++	m_buttons.clear();
++
++}
++
++AutoHideButtonBar::~AutoHideButtonBar()
++{
++	clear();
+ }
+ 
+ void AutoHideButtonBar::addButton(touch_gui_button_id button_id,
+@@ -467,7 +486,8 @@
+ 
+ void TouchScreenGUI::init(ISimpleTextureSource* tsrc)
+ {
+-	assert(tsrc != 0);
++	if (!tsrc)
++		return;
+ 
+ 	u32 button_size      = getGuiButtonSize();
+ 	m_visible            = true;
+@@ -656,7 +676,8 @@
+ 
+ 	/* add this event */
+ 	if (action) {
+-		assert(std::find(btn->ids.begin(),btn->ids.end(), eventID) == btn->ids.end());
++		if(!(std::find(btn->ids.begin(),btn->ids.end(), eventID) == btn->ids.end()))
++			return;
+ 
+ 		btn->ids.push_back(eventID);
+ 
+@@ -673,7 +694,8 @@
+ 		std::vector<int>::iterator pos =
+ 				std::find(btn->ids.begin(),btn->ids.end(), eventID);
+ 		/* has to be in touch list */
+-		assert(pos != btn->ids.end());
++		if(!(pos != btn->ids.end()))
++			return;
+ 		btn->ids.erase(pos);
+ 
+ 		if (btn->ids.size() > 0)  { return; }
+@@ -805,7 +827,8 @@
+ 		handleReleaseEvent(event.TouchInput.ID);
+ 	}
+ 	else {
+-		assert(event.TouchInput.Event == ETIE_MOVED);
++		if(!(event.TouchInput.Event == ETIE_MOVED))
++			return;
+ 		int move_idx = event.TouchInput.ID;
+ 
+ 		if (m_pointerpos[event.TouchInput.ID] ==
+@@ -1087,3 +1110,5 @@
+ 
+ 	Toggle(true);
+ }
++
++#endif
+\ No newline at end of file

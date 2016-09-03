@@ -1,0 +1,15 @@
+diff -ruN minetest-master/src/client/keys.h minetest-freeminer/src/client/keys.h
+--- minetest-master/src/client/keys.h	2016-09-03 16:15:52.681779000 -0700
++++ minetest-freeminer/src/client/keys.h	2016-09-03 15:43:59.814740000 -0700
+@@ -68,6 +68,11 @@
+ 
+ 		DEBUG_STACKS,
+ 
++		//freeminer
++		//MSG,
++		PLAYERLIST,
++		//=========
++
+ 		// joystick specific keys
+ 		MOUSE_L,
+ 		MOUSE_R,

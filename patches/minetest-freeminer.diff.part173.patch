@@ -1,0 +1,88 @@
+diff -ruN minetest-master/src/client/tile.h minetest-freeminer/src/client/tile.h
+--- minetest-master/src/client/tile.h	2016-09-03 16:15:52.573779000 -0700
++++ minetest-freeminer/src/client/tile.h	2016-09-03 15:43:59.914741000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++tile.h
+ Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #ifndef TILE_HEADER
+@@ -29,6 +32,17 @@
+ #include <vector>
+ #include "util/numeric.h"
+ 
++
++// EMT_TRANSPARENT_ALPHA_CHANNEL_REF doesn't seem to work on Android
++// (that's probably because of opengles driver and stuff?
++//  I certainly don't want to debug this, so for now workaround will only
++//  be applied to android devices)
++/*
++#ifdef __ANDROID__
++#define EMT_TRANSPARENT_ALPHA_CHANNEL_REF EMT_TRANSPARENT_ALPHA_CHANNEL
++#endif
++*/
++
+ class IGameDef;
+ struct TileSpec;
+ struct TileDef;
+@@ -82,6 +96,25 @@
+ };
+ 
+ /*
++	Stores internal information about a texture.
++*/
++struct TextureInfo
++{
++	std::string name;
++	video::ITexture *texture;
++
++	TextureInfo(
++			const std::string &name_,
++			video::ITexture *texture_=NULL,
++			video::IImage *img=nullptr
++		):
++		name(name_),
++		texture(texture_)
++	{
++	}
++};
++
++/*
+ 	TextureSource creates and caches textures.
+ */
+ 
+@@ -102,6 +135,7 @@
+ 	virtual u32 getTextureId(const std::string &name)=0;
+ 	virtual std::string getTextureName(u32 id)=0;
+ 	virtual video::ITexture* getTexture(u32 id)=0;
++	virtual TextureInfo* getTextureInfo(u32 id)=0;
+ 	virtual video::ITexture* getTexture(
+ 			const std::string &name, u32 *id = NULL)=0;
+ 	virtual video::ITexture* getTextureForMesh(

@@ -1,0 +1,71 @@
+diff -ruN minetest-master/src/threading/thread.cpp minetest-freeminer/src/threading/thread.cpp
+--- minetest-master/src/threading/thread.cpp	2016-09-03 16:15:52.625779000 -0700
++++ minetest-freeminer/src/threading/thread.cpp	2016-09-03 15:43:59.958741000 -0700
+@@ -52,6 +52,9 @@
+ 	#endif
+ #endif
+ 
++#if !defined(_WIN32)
++	#include <unistd.h>
++#endif
+ 
+ // for setName
+ #if defined(__linux__)
+@@ -69,7 +72,7 @@
+ 
+ // for bindToProcessor
+ #if __FreeBSD_version >= 702106
+-	typedef cpuset_t cpu_set_t;
++	typedef porting::cpuset_t cpu_set_t;
+ #elif defined(__linux__)
+ 	#include <sched.h>
+ #elif defined(__sun) || defined(sun)
+@@ -199,8 +202,8 @@
+ 	m_running = false;
+ 
+ #ifdef _WIN32
+-	TerminateThread(m_thread_handle, 0);
+-	CloseHandle(m_thread_handle);
++	TerminateThread(getThreadHandle(), 0);
++	CloseHandle(getThreadHandle());
+ #else
+ 	// We need to pthread_kill instead on Android since NDKv5's pthread
+ 	// implementation is incomplete.
+@@ -266,11 +269,12 @@
+ 	// It would be cleaner to do this with pthread_setname_np,
+ 	// which was added to glibc in version 2.12, but some major
+ 	// distributions are still runing 2.11 and previous versions.
+-	prctl(PR_SET_NAME, name.c_str());
+-
++	//prctl(PR_SET_NAME, name.c_str());
++	porting::setThreadName(name.c_str());
++	
+ #elif defined(__FreeBSD__) || defined(__OpenBSD__)
+ 
+-	pthread_set_name_np(pthread_self(), name.c_str());
++	porting::pthread_set_name_np(pthread_self(), name.c_str());
+ 
+ #elif defined(__NetBSD__)
+ 
+@@ -310,7 +314,11 @@
+ 
+ unsigned int Thread::getNumberOfProcessors()
+ {
+-#if __cplusplus >= 201103L
++#if defined(_SC_NPROCESSORS_CONF)
++
++	return sysconf(_SC_NPROCESSORS_CONF);
++
++#elif __cplusplus >= 201103L
+ 
+ 	return std::thread::hardware_concurrency();
+ 
+@@ -333,7 +341,7 @@
+ 
+ #elif defined(_GNU_SOURCE)
+ 
+-	return get_nprocs();
++	return get_nprocs_conf();
+ 
+ #elif defined(_WIN32)
+ 

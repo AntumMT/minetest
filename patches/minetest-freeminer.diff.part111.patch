@@ -1,0 +1,30 @@
+diff -ruN minetest-master/builtin/mainmenu/tab_multiplayer.lua minetest-freeminer/builtin/mainmenu/tab_multiplayer.lua
+--- minetest-master/builtin/mainmenu/tab_multiplayer.lua	2016-09-03 16:15:52.453778000 -0700
++++ minetest-freeminer/builtin/mainmenu/tab_multiplayer.lua	2016-09-03 15:43:59.850740000 -0700
+@@ -70,7 +70,7 @@
+ 					table.insert(menudata.favorites, i, table.remove(menudata.favorites, j))
+ 				end
+ 			end
+-				if favs[i].address ~= menudata.favorites[i].address then
++				if menudata.favorites[i] and favs[i].address ~= menudata.favorites[i].address then
+ 					table.insert(menudata.favorites, i, favs[i])
+ 				end
+ 			end
+@@ -105,7 +105,7 @@
+ 			if event.row <= #menudata.favorites then
+ 				if menudata.favorites_is_public and
+ 						not is_server_protocol_compat_or_error(
+-							fav.proto_min, fav.proto_max) then
++							fav.proto_min, fav.proto_max, fav.proto) then
+ 					return true
+ 				end
+ 
+@@ -217,7 +217,7 @@
+ 
+ 			if menudata.favorites_is_public and
+ 					not is_server_protocol_compat_or_error(
+-						fav.proto_min, fav.proto_max) then
++						fav.proto_min, fav.proto_max, fav.proto) then
+ 				return true
+ 			end
+ 		else

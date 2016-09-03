@@ -1,0 +1,186 @@
+diff -ruN minetest-master/po/es/minetest.po minetest-freeminer/po/es/minetest.po
+--- minetest-master/po/es/minetest.po	2016-09-03 16:15:52.561779000 -0700
++++ minetest-freeminer/po/es/minetest.po	2016-09-03 15:43:59.654739000 -0700
+@@ -1,4 +1,4 @@
+-# SOME DESCRIPTIVE TITLE.
++# Freeminer Spanish Language
+ # Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+ # This file is distributed under the same license as the PACKAGE package.
+ # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+@@ -165,8 +165,7 @@
+ #: builtin/mainmenu/dlg_create_world.lua
+ msgid "Warning: The minimal development test is meant for developers."
+ msgstr ""
+-"Advertencia: El juego \"Minimal development test\" está diseñado para "
+-"desarrolladores."
++"Advertencia: El subjuego \"minimal\" es exclusivo para desarrolladores."
+ 
+ #: builtin/mainmenu/dlg_create_world.lua
+ msgid "World name"
+@@ -178,7 +177,7 @@
+ 
+ #: builtin/mainmenu/dlg_delete_mod.lua
+ msgid "Are you sure you want to delete \"$1\"?"
+-msgstr "¿Realmente desea borrar \"$1\"?"
++msgstr "¿Seguro que deseas borrar \"$1\"?"
+ 
+ #: builtin/mainmenu/dlg_delete_mod.lua builtin/mainmenu/dlg_delete_world.lua
+ #: builtin/mainmenu/tab_server.lua builtin/mainmenu/tab_singleplayer.lua
+@@ -192,7 +191,7 @@
+ 
+ #: builtin/mainmenu/dlg_delete_mod.lua
+ msgid "Modmgr: invalid modpath \"$1\""
+-msgstr "Modmgr: Ruta del mod \"$1\" inválida"
++msgstr "Modmgr: Ruta de mod \"$1\" inválida"
+ 
+ #: builtin/mainmenu/dlg_delete_world.lua
+ msgid "Delete World \"$1\"?"
+@@ -223,10 +222,6 @@
+ msgstr "Navegar"
+ 
+ #: builtin/mainmenu/dlg_settings_advanced.lua
+-msgid "Disabled"
+-msgstr "Desactivado"
+-
+-#: builtin/mainmenu/dlg_settings_advanced.lua
+ msgid "Edit"
+ msgstr "Editar"
+ 
+@@ -286,10 +281,6 @@
+ msgstr "Seleccionar ruta"
+ 
+ #: builtin/mainmenu/dlg_settings_advanced.lua
+-msgid "Show technical names"
+-msgstr "Mostrar los nombres técnicos"
+-
+-#: builtin/mainmenu/dlg_settings_advanced.lua
+ msgid "The value must be greater than $1."
+ msgstr "El valor debe ser mayor que $1."
+ 
+@@ -303,7 +294,7 @@
+ "Install Mod: unsupported filetype \"$1\" or broken archive"
+ msgstr ""
+ "\n"
+-"Instalar mod: Formato de archivo \"$1\" no soportado o archivo corrupto"
++"Instalar mod: Tipo de archivo \"$1\" no soportado o archivo corrupto"
+ 
+ #: builtin/mainmenu/modmgr.lua
+ msgid "Failed to install $1 to $2"
+@@ -320,8 +311,8 @@
+ #: builtin/mainmenu/modmgr.lua
+ msgid "Install Mod: unable to find suitable foldername for modpack $1"
+ msgstr ""
+-"Instalar mod: Imposible encontrar un nombre de archivo adecuado para el "
+-"paquete de mod $1"
++"Instalar mod: Imposible encontrar nombre de carpeta adecuado para el paquete "
++"de mod $1"
+ 
+ # En el menú principal de mods pone repositorio no tienda.
+ #: builtin/mainmenu/store.lua
+@@ -394,7 +385,7 @@
+ 
+ #: builtin/mainmenu/tab_mods.lua
+ msgid "No mod description available"
+-msgstr "La descripción del mod no está disponible"
++msgstr "Descripción del mod no disponible"
+ 
+ #: builtin/mainmenu/tab_mods.lua
+ msgid "Rename"
+@@ -465,7 +456,7 @@
+ #: builtin/mainmenu/tab_server.lua builtin/mainmenu/tab_simple_main.lua
+ #: builtin/mainmenu/tab_singleplayer.lua
+ msgid "Enable Damage"
+-msgstr "Permitir daños"
++msgstr "Activar daño"
+ 
+ # Los dos puntos son intencionados.
+ #: builtin/mainmenu/tab_server.lua
+@@ -504,7 +495,6 @@
+ msgid "Start Game"
+ msgstr "Iniciar juego"
+ 
+-#: builtin/mainmenu/tab_settings.lua
+ msgid "2x"
+ msgstr "2x"
+ 
+@@ -545,6 +535,14 @@
+ msgstr "Configurar teclas"
+ 
+ #: builtin/mainmenu/tab_settings.lua
++msgid "GUI scale factor"
++msgstr "Factor de escala (GUI)"
++
++#, fuzzy
++msgid "Disabled"
++msgstr "Desactivado"
++
++#, fuzzy
+ msgid "Connected Glass"
+ msgstr "Vidrio Conectado"
+ 
+@@ -616,7 +614,9 @@
+ msgid "Shaders"
+ msgstr "Sombreadores"
+ 
+-#: builtin/mainmenu/tab_settings.lua
++msgid "Show technical names"
++msgstr "Mostrar los nombres técnicos"
++
+ msgid "Simple Leaves"
+ msgstr "Hojas simples"
+ 
+@@ -682,7 +682,7 @@
+ 
+ #: builtin/mainmenu/tab_texturepacks.lua
+ msgid "No information available"
+-msgstr "Sin información disponible"
++msgstr "Información no disponible"
+ 
+ #: builtin/mainmenu/tab_texturepacks.lua
+ msgid "Select texture pack:"
+@@ -843,7 +843,7 @@
+ 
+ #: src/game.cpp
+ msgid "Exit to OS"
+-msgstr "Salir al S.O."
++msgstr "Salir al SO"
+ 
+ #: src/game.cpp
+ msgid "Item definitions..."
+@@ -891,7 +891,7 @@
+ 
+ #: src/guiFormSpecMenu.cpp
+ msgid "Enter "
+-msgstr "Ingresar "
++msgstr "Entrar"
+ 
+ #: src/guiFormSpecMenu.cpp
+ msgid "Proceed"
+@@ -973,7 +973,7 @@
+ 
+ #: src/guiKeyChangeMenu.cpp
+ msgid "Toggle fast"
+-msgstr "Activar rápido"
++msgstr "Activar/Desactivar Modo Rápido"
+ 
+ #: src/guiKeyChangeMenu.cpp
+ msgid "Toggle fly"
+@@ -981,7 +981,7 @@
+ 
+ #: src/guiKeyChangeMenu.cpp
+ msgid "Toggle noclip"
+-msgstr "Activar noclip"
++msgstr "Activar/Desactivar noclip"
+ 
+ #: src/guiKeyChangeMenu.cpp
+ msgid "Use"
+@@ -1331,6 +1331,9 @@
+ "0 = oclusión de paralaje con información de inclinación (más rápido).\n"
+ "1 = mapa de relieve (más lento, más preciso)."
+ 
++msgid "Show Favorites"
++msgstr "Mostrar favoritos"
++
+ #: src/settings_translation_file.cpp
+ msgid "3D clouds"
+ msgstr "Nubes en 3D"

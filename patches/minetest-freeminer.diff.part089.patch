@@ -1,0 +1,37 @@
+diff -ruN minetest-master/builtin/game/misc.lua minetest-freeminer/builtin/game/misc.lua
+--- minetest-master/builtin/game/misc.lua	2016-09-03 16:15:52.445778000 -0700
++++ minetest-freeminer/builtin/game/misc.lua	2016-09-03 15:43:59.846740000 -0700
+@@ -24,6 +24,7 @@
+ 		return
+ 	end
+ 
++	local end_ms = os.clock() * 1000 + 50
+ 	-- Iterate backwards so that we miss any new timers added by
+ 	-- a timer callback, and so that we don't skip the next timer
+ 	-- in the list if we remove one.
+@@ -33,6 +34,7 @@
+ 			core.set_last_run_mod(job.mod_origin)
+ 			job.func(unpack(job.arg))
+ 			table.remove(jobs, i)
++			if os.clock() * 1000 > end_ms then return end
+ 		end
+ 	end
+ end)
+@@ -177,6 +179,17 @@
+ 	end
+ end
+ 
++--[[
++function freeminer.color(color)
++	assert(#color == 6, "Color must be six characters in length.")
++	return "\v#" .. color
++end
++
++function freeminer.colorize(color, message)
++	return freeminer.color(color) .. message .. freeminer.color("ffffff")
++end
++]]
++
+ local raillike_ids = {}
+ local raillike_cur_id = 0
+ function core.raillike_group(name)

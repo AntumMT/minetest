@@ -1,0 +1,13 @@
+diff -ruN minetest-master/builtin/mainmenu/dlg_delete_world.lua minetest-freeminer/builtin/mainmenu/dlg_delete_world.lua
+--- minetest-master/builtin/mainmenu/dlg_delete_world.lua	2016-09-03 16:15:52.437778000 -0700
++++ minetest-freeminer/builtin/mainmenu/dlg_delete_world.lua	2016-09-03 15:43:59.466738000 -0700
+@@ -19,7 +19,8 @@
+ local function delete_world_formspec(dialogdata)
+ 
+ 	local retval =
+-		"size[11.5,4.5,true]" ..
++		"size[12,6,false]" ..
++		--"size[11.5,4.5,true]" ..
+ 		"label[2,2;" ..
+ 		fgettext("Delete World \"$1\"?", dialogdata.delete_name) .. "]" ..
+ 		"button[3.25,3.5;2.5,0.5;world_delete_confirm;" .. fgettext("Delete") .. "]" ..

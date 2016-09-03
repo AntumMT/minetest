@@ -1,0 +1,69 @@
+diff -ruN minetest-master/src/mg_schematic.cpp minetest-freeminer/src/mg_schematic.cpp
+--- minetest-master/src/mg_schematic.cpp	2016-09-03 16:15:52.689779000 -0700
++++ minetest-freeminer/src/mg_schematic.cpp	2016-09-03 15:44:00.002741000 -0700
+@@ -178,9 +178,13 @@
+ bool Schematic::placeOnVManip(MMVManip *vm, v3s16 p, u32 flags,
+ 	Rotation rot, bool force_place)
+ {
++	if(!vm || !schemdata || !m_ndef)
++		return false;
++/*
+ 	assert(vm != NULL);
+ 	assert(schemdata != NULL);
+ 	sanity_check(m_ndef != NULL);
++*/
+ 
+ 	//// Determine effective rotation and effective schematic dimensions
+ 	if (rot == ROTATE_RAND)
+@@ -205,13 +209,21 @@
+ void Schematic::placeOnMap(Map *map, v3s16 p, u32 flags,
+ 	Rotation rot, bool force_place)
+ {
++	concurrent_map<v3POS, MapBlock *> lighting_modified_blocks;
++/*
+ 	std::map<v3s16, MapBlock *> lighting_modified_blocks;
++*/
+ 	std::map<v3s16, MapBlock *> modified_blocks;
+ 	std::map<v3s16, MapBlock *>::iterator it;
+ 
++	if(!map || !schemdata || !m_ndef)
++		return;
++
++/*
+ 	assert(map != NULL);
+ 	assert(schemdata != NULL);
+ 	sanity_check(m_ndef != NULL);
++*/
+ 
+ 	//// Determine effective rotation and effective schematic dimensions
+ 	if (rot == ROTATE_RAND)
+@@ -250,8 +262,10 @@
+ 	//// Create & dispatch map modification events to observers
+ 	MapEditEvent event;
+ 	event.type = MEET_OTHER;
++/*
+ 	for (it = modified_blocks.begin(); it != modified_blocks.end(); ++it)
+ 		event.modified_blocks.insert(it->first);
++*/
+ 
+ 	map->dispatchEvent(&event);
+ }
+@@ -464,6 +478,9 @@
+ 	if (ndef)
+ 		ndef->pendNodeResolve(this);
+ 
++	if (!name.size())
++		name = filename;
++
+ 	return true;
+ }
+ 
+@@ -520,6 +537,8 @@
+ 	for (s16 y = 0; y != size.Y; y++)
+ 		slice_probs[y] = MTSCHEM_PROB_ALWAYS;
+ 
++	if (schemdata)
++		delete []schemdata;
+ 	schemdata = new MapNode[size.X * size.Y * size.Z];
+ 
+ 	u32 i = 0;

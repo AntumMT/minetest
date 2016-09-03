@@ -1,0 +1,116 @@
+diff -ruN minetest-master/src/mg_biome.h minetest-freeminer/src/mg_biome.h
+--- minetest-master/src/mg_biome.h	2016-09-03 16:15:52.689779000 -0700
++++ minetest-freeminer/src/mg_biome.h	2016-09-03 15:43:59.818740000 -0700
+@@ -1,20 +1,23 @@
+ /*
+-Minetest
++biome.h
+ Copyright (C) 2010-2013 kwolekr, Ryan Kwolek <kwolekr@minetest.net>
++*/
++
++/*
++This file is part of Freeminer.
+ 
+-This program is free software; you can redistribute it and/or modify
+-it under the terms of the GNU Lesser General Public License as published by
+-the Free Software Foundation; either version 2.1 of the License, or
++Freeminer is free software: you can redistribute it and/or modify
++it under the terms of the GNU General Public License as published by
++the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+-This program is distributed in the hope that it will be useful,
++Freeminer  is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-GNU Lesser General Public License for more details.
++GNU General Public License for more details.
+ 
+-You should have received a copy of the GNU Lesser General Public License along
+-with this program; if not, write to the Free Software Foundation, Inc.,
+-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++You should have received a copy of the GNU General Public License
++along with Freeminer.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #ifndef MG_BIOME_HEADER
+@@ -24,6 +27,10 @@
+ #include "nodedef.h"
+ #include "noise.h"
+ 
++//#include "mapgen.h"
++
++struct MapgenParams;
++
+ class Settings;
+ class BiomeManager;
+ 
+@@ -57,6 +64,7 @@
+ 	content_t c_riverbed;
+ 	content_t c_dust;
+ 
++
+ 	s16 depth_top;
+ 	s16 depth_filler;
+ 	s16 depth_water_top;
+@@ -67,6 +75,10 @@
+ 	float heat_point;
+ 	float humidity_point;
+ 
++	//freeminer:
++	content_t c_ice;
++	content_t c_top_cold;
++
+ 	virtual void resolveNodeNames();
+ };
+ 
+@@ -80,7 +92,7 @@
+ };
+ 
+ struct BiomeParams {
+-	virtual void readParams(const Settings *settings) = 0;
++	virtual void readParams(Settings *settings) = 0;
+ 	virtual void writeParams(Settings *settings) const = 0;
+ 	virtual ~BiomeParams() {}
+ 
+@@ -134,14 +146,14 @@
+ 
+ struct BiomeParamsOriginal : public BiomeParams {
+ 	BiomeParamsOriginal() :
+-		np_heat(50, 50, v3f(750.0, 750.0, 750.0), 5349, 3, 0.5, 2.0),
++		np_heat(15, 30, v3f(750.0, 750.0, 750.0), 5349, 3, 0.5, 2.0),
+ 		np_humidity(50, 50, v3f(750.0, 750.0, 750.0), 842, 3, 0.5, 2.0),
+ 		np_heat_blend(0, 1.5, v3f(8.0, 8.0, 8.0), 13, 2, 1.0, 2.0),
+ 		np_humidity_blend(0, 1.5, v3f(8.0, 8.0, 8.0), 90003, 2, 1.0, 2.0)
+ 	{
+ 	}
+ 
+-	virtual void readParams(const Settings *settings);
++	virtual void readParams(Settings *settings);
+ 	virtual void writeParams(Settings *settings) const;
+ 
+ 	NoiseParams np_heat;
+@@ -199,6 +211,23 @@
+ 		return new Biome;
+ 	}
+ 
++	//freeminer:
++	u32 year_days;
++	s32 weather_heat_season;
++	s32 weather_heat_width;
++	s32 weather_heat_daily;
++	s32 weather_heat_height;
++	s32 weather_humidity_season;
++	s32 weather_humidity_width;
++	s32 weather_humidity_daily;
++	s32 weather_humidity_days;
++	s32 weather_hot_core;
++
++	MapgenParams * mapgen_params;
++	s16 calcBlockHeat(v3s16 p, uint64_t seed, float timeofday, float totaltime, bool use_weather = 1);
++	s16 calcBlockHumidity(v3s16 p, uint64_t seed, float timeofday, float totaltime, bool use_weather = 1);
++	//====
++
+ 	BiomeGen *createBiomeGen(BiomeGenType type, BiomeParams *params, v3s16 chunksize)
+ 	{
+ 		switch (type) {

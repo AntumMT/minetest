@@ -1,0 +1,12 @@
+diff -ruN minetest-master/builtin/mainmenu/tab_simple_main.lua minetest-freeminer/builtin/mainmenu/tab_simple_main.lua
+--- minetest-master/builtin/mainmenu/tab_simple_main.lua	2016-09-03 16:15:52.477778000 -0700
++++ minetest-freeminer/builtin/mainmenu/tab_simple_main.lua	2016-09-03 15:43:59.862740000 -0700
+@@ -175,7 +175,7 @@
+ 
+ 			if menudata.favorites_is_public and
+ 					not is_server_protocol_compat_or_error(
+-						fav.proto_min, fav.proto_max) then
++						fav.proto_min, fav.proto_max, fav.proto) then
+ 				return true
+ 			end
+ 		else

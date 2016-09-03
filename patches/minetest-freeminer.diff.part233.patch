@@ -1,0 +1,12 @@
+diff -ruN minetest-master/src/drawscene.h minetest-freeminer/src/drawscene.h
+--- minetest-master/src/drawscene.h	2016-09-03 16:15:52.613779000 -0700
++++ minetest-freeminer/src/drawscene.h	2016-09-03 15:43:59.762740000 -0700
+@@ -22,7 +22,7 @@
+ 
+ #include "camera.h"
+ #include "hud.h"
+-#include "minimap.h"
++//#include "minimap.h"
+ #include "irrlichttypes_extrabloated.h"
+ 
+ 
