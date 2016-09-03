@@ -1,0 +1,53 @@
+#server_list .total {
+	font-weight: bold;
+}
+
+#server_list table {
+	max-width: 100%;
+	width: 100%;
+	background-color: transparent;
+	border-collapse: collapse;
+	border-spacing: 0;
+	font-size: small;
+}
+
+#server_list td, #server_list th {
+	border: 1px solid gray;
+}
+
+#server_list thead {
+	background-color: #FFA;
+}
+
+#server_list tbody tr:nth-child(even) {
+	background-color: #EEE;
+}
+
+#server_list tbody tr:hover {
+	background-color: #CCC;
+}
+
+.mts_hover_list {
+	display: none;
+	border: 1px solid #88F;
+	border-radius: 4px;
+	background-color: white;
+	position: absolute;
+	z-index: 100;
+	padding: 0.5em;
+}
+
+td:hover .mts_hover_list {
+	display: block;
+}
+
+.mts_hover_list_text, .mts_tooltip {
+	text-decoration: underline;
+	text-decoration-style: dashed;
+}
+
+.clickable {
+	text-decoration: underline;
+	cursor: pointer;
+}
+
