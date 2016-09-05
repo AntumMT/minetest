@@ -129,6 +129,61 @@ bool ModApiCraft::readCraftReplacements(lua_State *L, int index,
 	}
 	return true;
 }
+
+std::pair<bool, std::string> checkRecipeItems(lua_State *L, CraftDefinition *def)
+{
+	std::vector<std::string> recipe = def->getRecipe();
+	std::string ingredient;
+	
+	std::pair<bool, std::string> checked_item;
+	
+	for(unsigned int recipe_it = 0; recipe_it < recipe.size(); recipe_it++){
+		ingredient = recipe.at(recipe_it);
+		
+		// FIXME: How to do this for groups?
+		if (ingredient.find("group:") != std::string::npos)
+		{
+			checked_item = std::make_pair(true, ingredient);
+			return checked_item;
+		}
+		
+		lua_getglobal(L, "core");
+		lua_getfield(L, -1, "registered_items");
+		luaL_checktype(L, -1, LUA_TTABLE);
+		lua_getfield(L, -1, ingredient.c_str());
+		if(!lua_isnil(L, -1))
+		{
+			checked_item = std::make_pair(true, ingredient);
+			return checked_item;
+		}
+		
+		lua_getglobal(L, "core"); // FIXME: Does 'lua_getglobal' need to be called for every field?
+		lua_getfield(L, -1, "registered_nodes");
+		luaL_checktype(L, -1, LUA_TTABLE);
+		lua_getfield(L, -1, ingredient.c_str());
+		if(!lua_isnil(L, -1))
+		{
+			checked_item = std::make_pair(true, ingredient);
+			return checked_item;
+		}
+		
+		lua_getglobal(L, "core");
+		lua_getfield(L, -1, "registered_aliases");
+		luaL_checktype(L, -1, LUA_TTABLE);
+		lua_getfield(L, -1, ingredient.c_str());
+		if(!lua_isnil(L, -1))
+		{
+			checked_item = std::make_pair(true, ingredient);
+			return checked_item;
+		}
+		
+	}
+	
+	checked_item = std::make_pair(false, ingredient);
+	
+	return checked_item;
+}
+
 // register_craft({output=item, recipe={{item00,item10},{item01,item11}})
 int ModApiCraft::l_register_craft(lua_State *L)
 {
@@ -142,6 +197,9 @@ int ModApiCraft::l_register_craft(lua_State *L)
 			getServer(L)->getWritableCraftDefManager();
 
 	std::string type = getstringfield_default(L, table, "type", "shaped");
+	
+	// Used to check recipe ingredients
+	std::pair<bool, std::string> recipe_check;
 
 	/*
 		CraftDefinitionShaped
@@ -172,6 +230,12 @@ int ModApiCraft::l_register_craft(lua_State *L)
 
 		CraftDefinition *def = new CraftDefinitionShaped(
 				output, width, recipe, replacements);
+		recipe_check = checkRecipeItems(L, def);
+		if(!recipe_check.first)
+		{
+			throw LuaError("Invalid ingredient \"" + recipe_check.second +
+					"\" for \"" + output + "\" craft recipe");
+		}
 		craftdef->registerCraft(def, getServer(L));
 	}
 	/*
@@ -204,6 +268,12 @@ int ModApiCraft::l_register_craft(lua_State *L)
 
 		CraftDefinition *def = new CraftDefinitionShapeless(
 				output, recipe, replacements);
+		recipe_check = checkRecipeItems(L, def);
+		if(!recipe_check.first)
+		{
+			throw LuaError("Invalid ingredient \"" + recipe_check.second +
+					"\" for \"" + output + "\" craft recipe");
+		}
 		craftdef->registerCraft(def, getServer(L));
 	}
 	/*
@@ -245,6 +315,12 @@ int ModApiCraft::l_register_craft(lua_State *L)
 
 		CraftDefinition *def = new CraftDefinitionCooking(
 				output, recipe, cooktime, replacements);
+		recipe_check = checkRecipeItems(L, def);
+		if(!recipe_check.first)
+		{
+			throw LuaError("Invalid ingredient \"" + recipe_check.second +
+					"\" for \"" + output + "\" craft recipe");
+		}
 		craftdef->registerCraft(def, getServer(L));
 	}
 	/*
@@ -269,6 +345,12 @@ int ModApiCraft::l_register_craft(lua_State *L)
 
 		CraftDefinition *def = new CraftDefinitionFuel(
 				recipe, burntime, replacements);
+		recipe_check = checkRecipeItems(L, def);
+		if(!recipe_check.first)
+		{
+			throw LuaError("Invalid ingredient \"" + recipe_check.second +
+					"\" for fuel craft recipe");
+		}
 		craftdef->registerCraft(def, getServer(L));
 	}
 	else

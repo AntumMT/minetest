@@ -152,6 +152,8 @@ public:
 	// Decreases count of every input item
 	virtual void decrementInput(CraftInput &input,
 		std::vector<ItemStack> &output_replacements, IGameDef *gamedef) const=0;
+	// Returns a list of ingredients for the recipe
+	virtual std::vector<std::string> getRecipe() const = 0;
 
 	virtual CraftHashType getHashType() const = 0;
 	virtual u64 getHash(CraftHashType type) const = 0;
@@ -190,6 +192,8 @@ public:
 	virtual CraftInput getInput(const CraftOutput &output, IGameDef *gamedef) const;
 	virtual void decrementInput(CraftInput &input,
 		std::vector<ItemStack> &output_replacements, IGameDef *gamedef) const;
+	// Returns a list of ingredients for the recipe
+	virtual std::vector<std::string> getRecipe() const;
 
 	virtual CraftHashType getHashType() const;
 	virtual u64 getHash(CraftHashType type) const;
@@ -239,6 +243,8 @@ public:
 	virtual CraftInput getInput(const CraftOutput &output, IGameDef *gamedef) const;
 	virtual void decrementInput(CraftInput &input,
 		std::vector<ItemStack> &output_replacements, IGameDef *gamedef) const;
+	// Returns a list of ingredients for the recipe
+	virtual std::vector<std::string> getRecipe() const;
 
 	virtual CraftHashType getHashType() const;
 	virtual u64 getHash(CraftHashType type) const;
@@ -283,6 +289,9 @@ public:
 	virtual CraftInput getInput(const CraftOutput &output, IGameDef *gamedef) const;
 	virtual void decrementInput(CraftInput &input,
 		std::vector<ItemStack> &output_replacements, IGameDef *gamedef) const;
+	// FIXME: Does not use a recipe
+	// Returns a list of ingredients for the recipe
+	virtual std::vector<std::string> getRecipe() const;
 
 	virtual CraftHashType getHashType() const { return CRAFT_HASH_TYPE_COUNT; }
 	virtual u64 getHash(CraftHashType type) const { return 2; }
@@ -326,6 +335,8 @@ public:
 	virtual CraftInput getInput(const CraftOutput &output, IGameDef *gamedef) const;
 	virtual void decrementInput(CraftInput &input,
 		std::vector<ItemStack> &output_replacements, IGameDef *gamedef) const;
+	// Returns a list of ingredients for the recipe
+	virtual std::vector<std::string> getRecipe() const;
 
 	virtual CraftHashType getHashType() const;
 	virtual u64 getHash(CraftHashType type) const;
@@ -375,6 +386,8 @@ public:
 	virtual CraftInput getInput(const CraftOutput &output, IGameDef *gamedef) const;
 	virtual void decrementInput(CraftInput &input,
 		std::vector<ItemStack> &output_replacements, IGameDef *gamedef) const;
+	// Returns a list of ingredients for the recipe
+	virtual std::vector<std::string> getRecipe() const;
 
 	virtual CraftHashType getHashType() const;
 	virtual u64 getHash(CraftHashType type) const;

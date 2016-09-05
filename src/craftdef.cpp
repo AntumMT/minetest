@@ -414,6 +414,11 @@ void CraftDefinitionShaped::decrementInput(CraftInput &input, std::vector<ItemSt
 	craftDecrementOrReplaceInput(input, output_replacements, replacements, gamedef);
 }
 
+std::vector<std::string> CraftDefinitionShaped::getRecipe() const
+{
+	return recipe;
+}
+
 CraftHashType CraftDefinitionShaped::getHashType() const
 {
 	assert(hash_inited); // Pre-condition
@@ -534,6 +539,11 @@ void CraftDefinitionShapeless::decrementInput(CraftInput &input, std::vector<Ite
 	IGameDef *gamedef) const
 {
 	craftDecrementOrReplaceInput(input, output_replacements, replacements, gamedef);
+}
+
+std::vector<std::string> CraftDefinitionShapeless::getRecipe() const
+{
+	return recipe;
 }
 
 CraftHashType CraftDefinitionShapeless::getHashType() const
@@ -669,6 +679,14 @@ void CraftDefinitionToolRepair::decrementInput(CraftInput &input, std::vector<It
 	craftDecrementInput(input, gamedef);
 }
 
+std::vector<std::string> CraftDefinitionToolRepair::getRecipe() const
+{
+	// FIXME: Does not use a recipe
+	std::vector<std::string> recipe_container;
+	
+	return recipe_container;
+}
+
 std::string CraftDefinitionToolRepair::dump() const
 {
 	std::ostringstream os(std::ios::binary);
@@ -727,6 +745,14 @@ void CraftDefinitionCooking::decrementInput(CraftInput &input, std::vector<ItemS
 	IGameDef *gamedef) const
 {
 	craftDecrementOrReplaceInput(input, output_replacements, replacements, gamedef);
+}
+
+std::vector<std::string> CraftDefinitionCooking::getRecipe() const
+{
+	std::vector<std::string> recipe_container;
+	recipe_container.push_back(recipe);
+	
+	return recipe_container;
 }
 
 CraftHashType CraftDefinitionCooking::getHashType() const
@@ -819,6 +845,14 @@ void CraftDefinitionFuel::decrementInput(CraftInput &input, std::vector<ItemStac
 	IGameDef *gamedef) const
 {
 	craftDecrementOrReplaceInput(input, output_replacements, replacements, gamedef);
+}
+
+std::vector<std::string> CraftDefinitionFuel::getRecipe() const
+{
+	std::vector<std::string> recipe_container;
+	recipe_container.push_back(recipe);
+	
+	return recipe_container;
 }
 
 CraftHashType CraftDefinitionFuel::getHashType() const
