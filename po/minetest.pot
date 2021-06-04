@@ -562,6 +562,10 @@ msgstr ""
 msgid "Delete World \"$1\"?"
 msgstr ""
 
+#: builtin/mainmenu/dlg_rename_favorite.lua
+msgid "Set server nick:"
+msgstr ""
+
 #: builtin/mainmenu/dlg_rename_modpack.lua
 msgid "Accept"
 msgstr ""
@@ -931,6 +935,10 @@ msgstr ""
 
 #: builtin/mainmenu/tab_online.lua
 msgid "Del. Favorite"
+msgstr ""
+
+#: builtin/mainmenu/tab_online.lua
+msgid "Rename"
 msgstr ""
 
 #: builtin/mainmenu/tab_online.lua
